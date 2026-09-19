@@ -1,16 +1,35 @@
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In progress', done: 'Done' };
 const STATUS_COLORS = { pending: '#b45309', in_progress: '#2563eb', done: '#15803d' };
 const PRIORITY_LABELS = { low: 'Low', normal: 'Normal', high: 'High' };
+const OUTCOME_LABELS = { pending: 'Open lead', converted: 'Policy made', lost: 'Lost lead' };
+const OUTCOME_COLORS = { pending: '#6b7280', converted: '#15803d', lost: '#b91c1c' };
 
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-IN');
 }
 
+// How long the assignee actually took, start to finish — created_at and
+// completed_at come from the same server, so the difference is safe from
+// the timezone parsing quirks that affect displaying either one alone.
+function formatDuration(startIso, endIso) {
+  if (!startIso || !endIso) return '—';
+  const ms = new Date(endIso) - new Date(startIso);
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
 // Dumb display component — the caller decides what controls to offer
-// (Dashboard lets the assignee move status forward; the Employees page
-// lets the assigner delete). Pass neither handler for a read-only list.
-export default function TaskList({ tasks, onStatusChange, onDelete, showAssignedBy }) {
+// (Dashboard lets the assignee move status forward and resolve the lead;
+// the Employees page lets the assigner delete). Pass neither handler for
+// a read-only list. onOpenDocs, if passed, makes the document count a
+// button that opens a documents modal (caller owns that modal's state).
+export default function TaskList({ tasks, onStatusChange, onDelete, onMarkLost, onOpenDocs, showAssignedBy }) {
   if (tasks.length === 0) {
     return <p className="subtitle">No tasks.</p>;
   }
@@ -23,7 +42,10 @@ export default function TaskList({ tasks, onStatusChange, onDelete, showAssigned
           <th>Due</th>
           <th>Priority</th>
           {showAssignedBy && <th>Assigned by</th>}
+          <th>Docs</th>
+          <th>Lead</th>
           <th>Status</th>
+          <th>Time taken</th>
           <th></th>
         </tr>
       </thead>
@@ -39,6 +61,29 @@ export default function TaskList({ tasks, onStatusChange, onDelete, showAssigned
             {showAssignedBy && (
               <td>{t.assigned_by_first_name ? `${t.assigned_by_first_name} ${t.assigned_by_last_name || ''}`.trim() : '—'}</td>
             )}
+            <td>
+              {t.document_count > 0 ? (
+                onOpenDocs ? (
+                  <button type="button" className="btn-link" onClick={() => onOpenDocs(t)}>
+                    {t.document_count} file{t.document_count > 1 ? 's' : ''}
+                  </button>
+                ) : (
+                  `${t.document_count} file${t.document_count > 1 ? 's' : ''}`
+                )
+              ) : (
+                '—'
+              )}
+            </td>
+            <td>
+              <span style={{ color: OUTCOME_COLORS[t.outcome], fontWeight: 600 }}>
+                {t.outcome === 'converted' && t.policy_number
+                  ? `Policy #${t.policy_number}`
+                  : OUTCOME_LABELS[t.outcome] || t.outcome}
+              </span>
+              {t.outcome === 'lost' && t.lost_reason && (
+                <div className="subtitle" style={{ margin: 0 }}>{t.lost_reason}</div>
+              )}
+            </td>
             <td>
               {onStatusChange ? (
                 <select
@@ -56,7 +101,13 @@ export default function TaskList({ tasks, onStatusChange, onDelete, showAssigned
                 </span>
               )}
             </td>
+            <td>{formatDuration(t.created_at, t.completed_at)}</td>
             <td>
+              {onMarkLost && t.outcome === 'pending' && (
+                <button type="button" className="btn-link" onClick={() => onMarkLost(t)}>
+                  Mark lost
+                </button>
+              )}
               {onDelete && (
                 <button type="button" className="btn-link" onClick={() => onDelete(t)}>
                   Delete

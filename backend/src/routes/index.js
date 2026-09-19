@@ -25,10 +25,13 @@ router.use('/customer-balances', require('./customerBalanceRoutes'));
 router.use('/commission-reconciliation', require('./commissionReconciliationRoutes'));
 router.use('/audit-log', require('./auditLogRoutes'));
 router.use('/attendance', require('./attendanceRoutes'));
+router.use('/performance', require('./performanceRoutes'));
 router.use('/alerts', require('./alertsRoutes'));
+router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/customer-notes', require('./customerNoteRoutes'));
 router.use('/documents', require('./documentRoutes'));
 router.use('/tasks', require('./taskRoutes'));
+router.use('/chat', require('./chatRoutes'));
 router.use('/role-permissions', require('./rolePermissionRoutes'));
 router.use('/lookups', require('./lookupRoutes'));
 

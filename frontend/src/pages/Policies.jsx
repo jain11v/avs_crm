@@ -4,7 +4,13 @@ import api from '../api/axios';
 import Layout from '../components/Layout';
 
 const PAGE_SIZE = 20;
-const STATUSES = ['Active', 'Expired', 'Cancelled', 'Lapsed'];
+const STATUSES = ['Active', 'Renewed', 'Not Renewed'];
+
+// Status values are plain English (e.g. "Not Renewed") but CSS classes
+// can't contain spaces — slugify before building the status-pill class.
+function statusSlug(status) {
+  return status?.toLowerCase().replace(/\s+/g, '-') ?? '';
+}
 
 export default function Policies() {
   const [rows, setRows] = useState([]);
@@ -129,7 +135,7 @@ export default function Policies() {
                     {new Date(p.policy_end_date).toLocaleDateString('en-IN')}
                   </td>
                   <td>
-                    <span className={`status-pill status-${p.status?.toLowerCase()}`}>{p.status}</span>
+                    <span className={`status-pill status-${statusSlug(p.status)}`}>{p.status}</span>
                   </td>
                   <td>
                     <button className="btn-link" onClick={() => navigate(`/policies/${p.id}/finance`)}>

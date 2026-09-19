@@ -37,6 +37,8 @@ import CustomerBalances from './pages/CustomerBalances';
 import CommissionReconciliation from './pages/CommissionReconciliation';
 import AuditLog from './pages/AuditLog';
 import Attendance from './pages/Attendance';
+import Performance from './pages/Performance';
+import Chat from './pages/Chat';
 import Admin from './pages/Admin';
 
 export default function App() {
@@ -426,6 +428,22 @@ export default function App() {
             element={
               <ProtectedRoute pageKey="attendance">
                 <Attendance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/performance"
+            element={
+              <ProtectedRoute pageKey="performance">
+                <Performance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <Chat />
               </ProtectedRoute>
             }
           />

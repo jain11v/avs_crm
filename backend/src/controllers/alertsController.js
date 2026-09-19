@@ -1,16 +1,12 @@
 const db = require('../config/db');
+const { pagesForRole } = require('../utils/rolePages');
+const { selfAndDescendantIds } = require('../utils/orgHierarchy');
 
 // No stored/scheduled notifications here — there's no cron in this app and
 // no email/SMS credentials to send anything externally, so alerts are
 // computed live from current data every time this is called. That also
 // means an alert disappears the moment its underlying condition is
 // resolved, with no "mark as read" bookkeeping needed.
-
-async function pagesForRole(role) {
-  if (role === 'admin') return null; // null = every page
-  const result = await db.query('SELECT page_key FROM role_permissions WHERE role = $1', [role]);
-  return new Set(result.rows.map((r) => r.page_key));
-}
 
 // GET /api/alerts
 async function getAlerts(req, res, next) {
@@ -22,21 +18,37 @@ async function getAlerts(req, res, next) {
     const alerts = [];
 
     if (hasPage('renewals')) {
+      // Scoped by ownership (policies.user_id) for anyone but admin — same
+      // rule as policyController.getRenewalsDue(): an employee only gets
+      // notified about their own due renewals, a manager also gets
+      // notified about their team's.
+      const ownerParams = [];
+      let ownerFilter = '';
+      if (role !== 'admin') {
+        const ownerIds = await selfAndDescendantIds(req.employee.id);
+        ownerParams.push(ownerIds);
+        ownerFilter = `AND p.user_id = ANY($${ownerParams.length})`;
+      }
+
       const result = await db.query(
         `SELECT p.id, p.policy_number, p.policy_end_date, c.name AS customer_name
          FROM policies p
          LEFT JOIN customers c ON p.customer_id = c.id
-         WHERE p.renewable = true AND p.status IN ('Active', 'Expired')
+         WHERE p.renewable = true AND p.status IN ('Active', 'Not Renewed')
            AND p.policy_end_date <= CURRENT_DATE + INTERVAL '30 days'
            AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
+           ${ownerFilter}
          ORDER BY p.policy_end_date ASC
-         LIMIT 5`
+         LIMIT 5`,
+        ownerParams
       );
       const countResult = await db.query(
         `SELECT COUNT(*) FROM policies p
-         WHERE p.renewable = true AND p.status IN ('Active', 'Expired')
+         WHERE p.renewable = true AND p.status IN ('Active', 'Not Renewed')
            AND p.policy_end_date <= CURRENT_DATE + INTERVAL '30 days'
-           AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)`
+           AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
+           ${ownerFilter}`,
+        ownerParams
       );
       const count = parseInt(countResult.rows[0].count);
       if (count > 0) {

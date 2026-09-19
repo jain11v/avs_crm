@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { list, getById, create, update, remove, getFinance, getRenewalsDue } = require('../controllers/policyController');
+const { list, getById, create, update, remove, getFinance, getRenewalsDue, markLost } = require('../controllers/policyController');
 const { requireAuth } = require('../middleware/authMiddleware');
 
 router.use(requireAuth);
@@ -11,6 +11,7 @@ router.get('/:id/finance', getFinance);
 router.get('/:id', getById);
 router.post('/', create);
 router.put('/:id', update);
+router.patch('/:id/lost', markLost);
 router.delete('/:id', remove);
 
 module.exports = router;

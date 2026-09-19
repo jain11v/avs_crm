@@ -27,12 +27,19 @@ async function getCities(req, res, next) {
   }
 }
 
+// reporting_to is included so the frontend can work out who's above/below
+// whom in the org chart (e.g. which employees a manager may assign tasks
+// to) without a extra round trip per check.
 async function getEmployees(req, res, next) {
   try {
     const result = await db.query(
-      `SELECT id, first_name, last_name FROM employees WHERE is_active = true ORDER BY first_name`
+      `SELECT id, first_name, last_name, reporting_to FROM employees WHERE is_active = true ORDER BY first_name`
     );
-    res.json(result.rows.map((e) => ({ id: e.id, name: `${e.first_name} ${e.last_name}` })));
+    res.json(result.rows.map((e) => ({
+      id: e.id,
+      name: `${e.first_name} ${e.last_name}`,
+      reporting_to: e.reporting_to,
+    })));
   } catch (err) {
     next(err);
   }

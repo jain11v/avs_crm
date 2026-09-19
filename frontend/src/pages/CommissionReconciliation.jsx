@@ -256,7 +256,7 @@ export default function CommissionReconciliation() {
                   <th>Customer</th>
                   <th>Broker branch</th>
                   <th>Premium</th>
-                  <th>Brok % / TP %</th>
+                  <th>Brok % / TP % / Reward %</th>
                   <th>Expected</th>
                   <th>Received</th>
                   <th>Variance</th>
@@ -270,7 +270,7 @@ export default function CommissionReconciliation() {
                     <td>{r.customer_name}</td>
                     <td>{r.broker_branch_name || '—'}</td>
                     <td>{formatMoney(r.premium_amount)}</td>
-                    <td>{r.brok_percent ?? '—'}% / {r.tp_brok_percent ?? '—'}%</td>
+                    <td>{r.brok_percent ?? '—'}% / {r.tp_brok_percent ?? '—'}% / {r.reward_percent ?? '—'}%</td>
                     <td>
                       {r.commission_status && r.commission_status !== 'approved' ? (
                         <span style={{ color: r.commission_status === 'rejected' ? '#b91c1c' : '#b45309' }}>

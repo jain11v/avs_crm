@@ -5,7 +5,10 @@ import Layout from '../components/Layout';
 import DocumentsPanel from '../components/DocumentsPanel';
 import TaskList from '../components/TaskList';
 import AssignTaskModal from '../components/AssignTaskModal';
+import TaskDocumentsModal from '../components/TaskDocumentsModal';
 import { useAuth } from '../context/AuthContext';
+import { uploadFiles } from '../utils/uploadFiles';
+import { isAncestor } from '../utils/orgHierarchy';
 
 const EMPTY_FORM = {
   first_name: '',
@@ -41,6 +44,7 @@ export default function EmployeeForm() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [tasks, setTasks] = useState([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [docsTask, setDocsTask] = useState(null);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -102,7 +106,11 @@ export default function EmployeeForm() {
 
   async function handleAssignTask(values) {
     try {
-      await api.post('/tasks', { ...values, assigned_to: id });
+      const { files, ...body } = values;
+      const res = await api.post('/tasks', body);
+      if (files && files.length > 0) {
+        await uploadFiles(files, 'task', res.data.id);
+      }
       setAssignModalOpen(false);
       loadTasks();
     } catch (err) {
@@ -119,12 +127,13 @@ export default function EmployeeForm() {
     }
   }
 
-  // Mirrors the backend's own rule (admin, or this employee's reporting
-  // manager) — just for showing/hiding the button; the API enforces it
-  // for real.
+  // Mirrors the backend's own rule (admin, anyone above this employee in
+  // the reporting chain, or this employee viewing their own record) — just
+  // for showing/hiding the button; the API enforces it for real.
   const canAssignTask = currentEmployee && (
     currentEmployee.role === 'admin' ||
-    (form.reporting_to && String(form.reporting_to) === String(currentEmployee.id))
+    (isEdit && String(currentEmployee.id) === String(id)) ||
+    (isEdit && isAncestor(employees, currentEmployee.id, id))
   );
 
   // Cascade: state -> its cities
@@ -382,17 +391,25 @@ export default function EmployeeForm() {
             )}
           </div>
           <div style={{ marginTop: '0.6rem' }}>
-            <TaskList tasks={tasks} showAssignedBy onDelete={canAssignTask ? handleDeleteTask : undefined} />
+            <TaskList
+              tasks={tasks}
+              showAssignedBy
+              onDelete={canAssignTask ? handleDeleteTask : undefined}
+              onOpenDocs={setDocsTask}
+            />
           </div>
 
           <DocumentsPanel entityType="employee" entityId={id} title="Files sent to this employee" />
 
           <AssignTaskModal
             open={assignModalOpen}
-            employeeName={`${form.first_name} ${form.last_name}`.trim()}
+            lockedEmployeeId={id}
+            lockedEmployeeName={`${form.first_name} ${form.last_name}`.trim()}
             onClose={() => setAssignModalOpen(false)}
             onSave={handleAssignTask}
           />
+
+          <TaskDocumentsModal open={Boolean(docsTask)} task={docsTask} onClose={() => setDocsTask(null)} />
         </>
       )}
     </Layout>

@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
 
-const EMPTY_FORM = { title: '', description: '', due_date: '', priority: 'normal' };
+const EMPTY_FORM = { title: '', description: '', due_date: '', priority: 'normal', assigned_to: '' };
 
-export default function AssignTaskModal({ open, employeeName, onClose, onSave }) {
+// Two ways to open this: from an employee's own record (lockedEmployeeId
+// fixes who it goes to) or from the Dashboard (employees is a picker list,
+// assigned_to is chosen in the form). Supporting documents picked here are
+// uploaded by the caller after the task itself is created — this modal
+// just collects the File objects.
+export default function AssignTaskModal({ open, employees, lockedEmployeeId, lockedEmployeeName, onClose, onSave }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, assigned_to: lockedEmployeeId || '' });
+    setFiles([]);
     setError('');
-  }, [open]);
+  }, [open, lockedEmployeeId]);
 
   useEffect(() => {
     if (!open) return;
@@ -28,9 +35,18 @@ export default function AssignTaskModal({ open, employeeName, onClose, onSave })
     setForm((f) => ({ ...f, [name]: value }));
   }
 
+  function handleFilesSelected(e) {
+    setFiles(Array.from(e.target.files || []));
+  }
+
   function handleSave() {
     if (!form.title.trim()) {
       setError('Give the task a title.');
+      return;
+    }
+    const assignedTo = lockedEmployeeId || form.assigned_to;
+    if (!assignedTo) {
+      setError('Choose who to assign this to.');
       return;
     }
     onSave({
@@ -38,6 +54,8 @@ export default function AssignTaskModal({ open, employeeName, onClose, onSave })
       description: form.description.trim() || null,
       due_date: form.due_date || null,
       priority: form.priority,
+      assigned_to: assignedTo,
+      files,
     });
   }
 
@@ -45,7 +63,7 @@ export default function AssignTaskModal({ open, employeeName, onClose, onSave })
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Assign task — {employeeName}</h3>
+          <h3>Assign task{lockedEmployeeName ? ` — ${lockedEmployeeName}` : ''}</h3>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
@@ -53,6 +71,18 @@ export default function AssignTaskModal({ open, employeeName, onClose, onSave })
           {error && <div className="form-error">{error}</div>}
 
           <div className="form-grid">
+            {!lockedEmployeeId && (
+              <div className="field field-wide">
+                <label>Assign to *</label>
+                <select name="assigned_to" value={form.assigned_to} onChange={handleChange}>
+                  <option value="">—</option>
+                  {(employees || []).map((e) => (
+                    <option key={e.id} value={e.id}>{e.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="field field-wide">
               <label>Title *</label>
               <input name="title" value={form.title} onChange={handleChange} maxLength={200} />
@@ -75,6 +105,21 @@ export default function AssignTaskModal({ open, employeeName, onClose, onSave })
                 <option value="normal">Normal</option>
                 <option value="high">High</option>
               </select>
+            </div>
+
+            <div className="field field-wide">
+              <label>Supporting documents</label>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={handleFilesSelected}
+              />
+              {files.length > 0 && (
+                <p className="subtitle" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
+                  {files.length} file{files.length > 1 ? 's' : ''} selected
+                </p>
+              )}
             </div>
           </div>
 

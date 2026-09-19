@@ -8,23 +8,32 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-const ENTITY_TABLES = { customer: 'customers', policy: 'policies', employee: 'employees' };
+const ENTITY_TABLES = { customer: 'customers', policy: 'policies', employee: 'employees', task: 'tasks' };
 // Which page's permission gates documents on each entity type. 'employee'
-// isn't page-gated at all — an employee always needs to see files sent to
-// them regardless of their role's page access, so it's checked against
-// the reporting relationship instead (see hasAccess).
+// and 'task' aren't page-gated at all — an employee always needs to see
+// files sent to them, or attached to a task they're on either side of,
+// regardless of their role's page access, so those are checked against
+// the reporting/assignment relationship instead (see hasAccess).
 const ENTITY_PAGES = { customer: 'customers', policy: 'policies' };
 
 // Customer/policy documents follow the page permission a role has.
 // Employee documents follow the same reporting relationship tasks do: an
 // employee always sees their own, their reporting manager (or an admin)
-// can send/view/remove them, nobody else can.
+// can send/view/remove them, nobody else can. Task documents (supporting
+// files for a lead) are visible to whoever assigned the task and whoever
+// it's assigned to.
 async function hasAccess(req, entityType, entityId) {
   if (req.employee.role === 'admin') return true;
   if (entityType === 'employee') {
     if (String(req.employee.id) === String(entityId)) return true;
     const result = await db.query('SELECT reporting_to FROM employees WHERE id = $1', [entityId]);
     return result.rows.length > 0 && String(result.rows[0].reporting_to) === String(req.employee.id);
+  }
+  if (entityType === 'task') {
+    const result = await db.query('SELECT assigned_to, assigned_by FROM tasks WHERE id = $1', [entityId]);
+    if (result.rows.length === 0) return false;
+    const { assigned_to, assigned_by } = result.rows[0];
+    return String(req.employee.id) === String(assigned_to) || String(req.employee.id) === String(assigned_by);
   }
   return (req.permissions || new Set()).has(ENTITY_PAGES[entityType]);
 }
@@ -50,7 +59,7 @@ async function list(req, res, next) {
   try {
     const { entity_type, entity_id } = req.query;
     if (!ENTITY_TABLES[entity_type] || !entity_id) {
-      return res.status(400).json({ error: 'entity_type (customer|policy|employee) and entity_id are required.' });
+      return res.status(400).json({ error: 'entity_type (customer|policy|employee|task) and entity_id are required.' });
     }
     if (!(await hasAccess(req, entity_type, entity_id))) {
       return res.status(403).json({ error: 'You do not have access to these documents.' });
@@ -80,7 +89,7 @@ async function upload(req, res, next) {
     }
     if (!ENTITY_TABLES[entity_type] || !entity_id) {
       fs.unlink(req.file.path, () => {});
-      return res.status(400).json({ error: 'entity_type (customer|policy|employee) and entity_id are required.' });
+      return res.status(400).json({ error: 'entity_type (customer|policy|employee|task) and entity_id are required.' });
     }
     if (!(await hasAccess(req, entity_type, entity_id))) {
       fs.unlink(req.file.path, () => {});

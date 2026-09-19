@@ -23,6 +23,7 @@ const PAGES = [
   { key: 'commission_reconciliation', label: 'Commission reconciliation' },
   { key: 'audit_log', label: 'Activity log' },
   { key: 'attendance', label: 'Attendance' },
+  { key: 'performance', label: 'Performance' },
 ];
 
 const PAGE_KEYS = PAGES.map((p) => p.key);

@@ -17,7 +17,7 @@ async function getByPolicy(req, res, next) {
     }
 
     const result = await db.query(
-      `SELECT c.id, c.brok_percent, c.tp_brok_percent, c.gst, c.remarks,
+      `SELECT c.id, c.brok_percent, c.tp_brok_percent, c.reward_percent, c.gst, c.remarks,
               c.status, c.set_by, c.approver_remarks,
               sb.first_name AS set_by_first_name, sb.last_name AS set_by_last_name,
               ab.first_name AS approved_by_first_name, ab.last_name AS approved_by_last_name

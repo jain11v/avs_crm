@@ -55,4 +55,21 @@ describe('computeExpectedCommission', () => {
     });
     expect(result.total).toBe(0);
   });
+
+  test('reward_percent applies to the whole premium (non-TP + TP combined), on top of brokerage', () => {
+    // 8000 OD @15%, 2000 TP @5%, plus 2% reward on the full 10000, 18% GST.
+    // Brokerage: 8000*0.15 + 2000*0.05 = 1300. Reward: 10000*0.02 = 200. Pretax = 1500; +18% GST = 1770.
+    const result = computeExpectedCommission({
+      non_tp_premium: 8000, tp_premium: 2000, brok_percent: 15, tp_brok_percent: 5, reward_percent: 2, commission_gst_percent: 18,
+    });
+    expect(result.pretax).toBe(1500);
+    expect(result.total).toBe(1770);
+  });
+
+  test('reward_percent is optional and defaults to zero when unset', () => {
+    const withoutReward = computeExpectedCommission({
+      non_tp_premium: 8000, tp_premium: 0, brok_percent: 12, tp_brok_percent: null, reward_percent: null, commission_gst_percent: 18,
+    });
+    expect(withoutReward.total).toBe(1132.8);
+  });
 });

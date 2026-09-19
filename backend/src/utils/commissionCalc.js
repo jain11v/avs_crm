@@ -24,12 +24,14 @@ function validateCommission(commission) {
 
   const brokPercent = toPercentOrNull(commission.brok_percent);
   const tpBrokPercent = toPercentOrNull(commission.tp_brok_percent);
+  const rewardPercent = toPercentOrNull(commission.reward_percent);
   const gstRaw = toPercentOrNull(commission.gst);
   const gst = gstRaw === null ? 18 : gstRaw;
 
   for (const [label, value] of [
     ['Brokerage %', brokPercent],
     ['TP brokerage %', tpBrokPercent],
+    ['Reward %', rewardPercent],
     ['GST %', gst],
   ]) {
     if (value !== null && (!Number.isFinite(value) || value < 0)) {
@@ -41,6 +43,7 @@ function validateCommission(commission) {
     row: {
       brok_percent: brokPercent,
       tp_brok_percent: tpBrokPercent,
+      reward_percent: rewardPercent,
       gst,
       remarks: commission.remarks || null,
     },

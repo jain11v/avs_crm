@@ -21,6 +21,7 @@ export const PAGES = [
   { key: 'commission_reconciliation', label: 'Commission reconciliation', path: '/commission-reconciliation' },
   { key: 'audit_log', label: 'Activity log', path: '/activity-log' },
   { key: 'attendance', label: 'Attendance', path: '/attendance' },
+  { key: 'performance', label: 'Performance', path: '/performance' },
 ];
 
 export const ROLES = ['employee', 'manager'];

@@ -30,6 +30,9 @@ export default function Layout({ children }) {
                 {p.label}
               </NavLink>
             ))}
+            <NavLink to="/chat" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Chat
+            </NavLink>
             {employee?.role === 'admin' && (
               <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
                 Admin

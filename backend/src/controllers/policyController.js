@@ -2,12 +2,13 @@ const db = require('../config/db');
 const { computePremiums } = require('../utils/premiumCalc');
 const { validateCommission } = require('../utils/commissionCalc');
 const { diffFields, logChange } = require('../utils/auditLog');
+const { selfAndDescendantIds } = require('../utils/orgHierarchy');
 
 const POLICY_AUDIT_FIELDS = [
   'policy_number', 'customer_id', 'insurer_id', 'insurer_branch_id',
   'sum_insured', 'premium_amount', 'policy_start_date', 'policy_end_date', 'status',
 ];
-const COMMISSION_AUDIT_FIELDS = ['brok_percent', 'tp_brok_percent', 'gst', 'remarks'];
+const COMMISSION_AUDIT_FIELDS = ['brok_percent', 'tp_brok_percent', 'reward_percent', 'gst', 'remarks'];
 
 // An employee's commission entry needs a manager/admin to confirm it
 // before it counts toward reconciliation (mirrors the discount/cashback
@@ -48,13 +49,20 @@ function friendlyCheckError(err) {
     return 'Policy end date must be after the start date.';
   }
   if (err.constraint === 'policies_status_check') {
-    return 'Status must be one of: Active, Expired, Cancelled, Lapsed.';
+    return 'Status must be one of: Active, Renewed, Not Renewed.';
   }
   if (err.constraint === 'policies_type_of_business_check') {
     return 'Type of business must be one of: new, old, renewal.';
   }
   return 'One of the fields is not in a valid format.';
 }
+
+// Status is never entered directly (see EDITABLE_FIELDS) — it only ever
+// takes one of three values, and dates play no part in it: every new
+// policy starts 'Active' (below), markLost() moves it to 'Not Renewed',
+// and create() moves a policy's *source* to 'Renewed' when something else
+// renews it. There's deliberately no "Lapsed"/"Expired" — whether the
+// cover dates have passed doesn't change what bucket a policy is in here.
 
 // GET /api/policies?q=&status=&page=&limit=
 async function list(req, res, next) {
@@ -143,13 +151,28 @@ async function getById(req, res, next) {
 }
 
 // GET /api/policies/renewals-due?days=30
-// Policies worth renewing: renewable, still Active or already Expired, due
-// within the window (or already overdue — no lower bound, so anything not
-// yet renewed keeps showing up until someone acts on it), and not already
-// renewed (no other policy points back to it).
+// Policies worth renewing: renewable, due within the window (or already
+// overdue — no lower bound, so anything not yet renewed keeps showing up
+// until someone acts on it), status 'Active' or 'Not Renewed' (being marked
+// lost, via markLost() below, must NOT drop a policy off this list — the
+// business still wants to see and possibly re-chase it), and not already
+// renewed (no other policy points back to it — 'Renewed' is excluded by
+// this same check, not by the status filter). Scoped by ownership
+// (policies.user_id, "assigned employee") for anyone but admin — an
+// employee sees only their own, and anyone with reports (see
+// selfAndDescendantIds) also sees their whole team's, so a plain employee
+// naturally sees only themselves since they have no reports.
 async function getRenewalsDue(req, res, next) {
   try {
     const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
+
+    const params = [days];
+    let ownerFilter = '';
+    if (req.employee.role !== 'admin') {
+      const ownerIds = await selfAndDescendantIds(req.employee.id);
+      params.push(ownerIds);
+      ownerFilter = `AND p.user_id = ANY($${params.length})`;
+    }
 
     const result = await db.query(
       `SELECT p.id, p.policy_number, p.premium_amount, p.policy_end_date, p.status,
@@ -158,16 +181,65 @@ async function getRenewalsDue(req, res, next) {
        LEFT JOIN customers c ON p.customer_id = c.id
        LEFT JOIN insurers i ON p.insurer_id = i.id
        WHERE p.renewable = true
-         AND p.status IN ('Active', 'Expired')
+         AND p.status IN ('Active', 'Not Renewed')
          AND p.policy_end_date <= CURRENT_DATE + ($1 || ' days')::interval
          AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
+         ${ownerFilter}
        ORDER BY p.policy_end_date ASC`,
-      [days]
+      params
     );
 
     res.json({ data: result.rows, days });
   } catch (err) {
     next(err);
+  }
+}
+
+// PATCH /api/policies/:id/lost
+// Marks a policy's renewal as lost — the customer isn't renewing (this
+// time). Sets status = 'Not Renewed' rather than 'Cancelled': a lost
+// renewal isn't a genuine mid-term policy cancellation, and — unlike
+// Cancelled — it deliberately keeps showing up in the renewals-due
+// list/alert (see getRenewalsDue above) rather than disappearing, since
+// the business still wants to see and possibly re-chase it. Also stamps
+// lost_by/lost_at (migration 028) so it can be counted per employee — see
+// performanceController.js.
+async function markLost(req, res, next) {
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `SELECT ${POLICY_AUDIT_FIELDS.join(', ')} FROM policies WHERE id = $1`,
+      [req.params.id]
+    );
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Policy not found.' });
+    }
+    const before = existing.rows[0];
+
+    await client.query(
+      `UPDATE policies SET status = 'Not Renewed', lost_by = $1, lost_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [req.employee.id, req.params.id]
+    );
+
+    await logChange(client, {
+      entityType: 'policy',
+      entityId: req.params.id,
+      policyId: req.params.id,
+      action: 'update',
+      changes: diffFields(before, { ...before, status: 'Not Renewed' }, POLICY_AUDIT_FIELDS),
+      employeeId: req.employee.id,
+    });
+
+    await client.query('COMMIT');
+    res.json({ id: Number(req.params.id), status: 'Not Renewed' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
   }
 }
 
@@ -262,10 +334,10 @@ async function getFinance(req, res, next) {
 // only ever derived from the policy's premium coverage rows (see
 // computePremiums / the premiums array handling in create and update).
 const EDITABLE_FIELDS = [
-  'user_id', 'type_of_business', 'policy_number', 'vertical_id', 'sub_vertical_id',
+  'type_of_business', 'policy_number', 'vertical_id', 'sub_vertical_id',
   'customer_id', 'renewable', 'insurer_id', 'insurer_branch_id', 'sum_insured',
   'issued_from_branch_id', 'policy_start_date', 'policy_end_date',
-  'source', 'telecaller', 'status', 'remarks', 'renewed_from_policy_id', 'risk_details',
+  'source', 'telecaller', 'remarks', 'renewed_from_policy_id', 'risk_details',
 ];
 
 const REQUIRED_FIELDS = [
@@ -285,6 +357,25 @@ function pickFields(body) {
 
 function missingRequiredFields(fields) {
   return REQUIRED_FIELDS.filter((f) => fields[f] === undefined || fields[f] === null || fields[f] === '');
+}
+
+// A policy created from a task-lead (see taskController) carries its
+// documents over — checked inside the same transaction as the policy
+// insert so a bad from_task_id rolls the whole thing back rather than
+// leaving an orphaned policy.
+async function loadLinkableTask(client, taskId, employee) {
+  const result = await client.query('SELECT id, assigned_to, outcome FROM tasks WHERE id = $1', [taskId]);
+  if (result.rows.length === 0) {
+    return { error: 'That task was not found.' };
+  }
+  const task = result.rows[0];
+  if (employee.role !== 'admin' && String(task.assigned_to) !== String(employee.id)) {
+    return { error: 'You can only link a policy to your own task.' };
+  }
+  if (task.outcome !== 'pending') {
+    return { error: 'That task has already been resolved.' };
+  }
+  return { task };
 }
 
 // POST /api/policies
@@ -307,6 +398,8 @@ async function create(req, res, next) {
 
     const fields = pickFields(req.body);
     fields.premium_amount = netPremium;
+    fields.user_id = req.employee.id;
+    fields.status = 'Active';
 
     const missing = missingRequiredFields(fields);
     if (missing.length > 0) {
@@ -314,6 +407,16 @@ async function create(req, res, next) {
     }
 
     await client.query('BEGIN');
+
+    let linkedTask = null;
+    if (req.body.from_task_id) {
+      const taskCheck = await loadLinkableTask(client, req.body.from_task_id, req.employee);
+      if (taskCheck.error) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: taskCheck.error });
+      }
+      linkedTask = taskCheck.task;
+    }
 
     const columns = Object.keys(fields);
     const values = Object.values(fields);
@@ -336,6 +439,29 @@ async function create(req, res, next) {
       employeeId: req.employee.id,
     });
 
+    // This new policy renews another one — flip the source's own status to
+    // 'Renewed' so it reads correctly wherever status is shown (it was
+    // already excluded from the renewals-due list via the "already
+    // renewed" NOT EXISTS check regardless of status, but it would
+    // otherwise keep showing a stale Active/Not Renewed forever).
+    if (fields.renewed_from_policy_id) {
+      const sourceBefore = (await client.query(
+        `SELECT ${POLICY_AUDIT_FIELDS.join(', ')} FROM policies WHERE id = $1`,
+        [fields.renewed_from_policy_id]
+      )).rows[0];
+      if (sourceBefore) {
+        await client.query(`UPDATE policies SET status = 'Renewed' WHERE id = $1`, [fields.renewed_from_policy_id]);
+        await logChange(client, {
+          entityType: 'policy',
+          entityId: fields.renewed_from_policy_id,
+          policyId: fields.renewed_from_policy_id,
+          action: 'update',
+          changes: diffFields(sourceBefore, { ...sourceBefore, status: 'Renewed' }, POLICY_AUDIT_FIELDS),
+          employeeId: req.employee.id,
+        });
+      }
+    }
+
     for (const row of premiumRows) {
       await client.query(
         `INSERT INTO premiums (policy_id, coverage, sum_insured, prem_rate, prem, gst_percent, gst, is_third_party)
@@ -348,10 +474,10 @@ async function create(req, res, next) {
       const c = commissionResult.row;
       const approval = commissionApprovalFor(req.employee);
       const commissionResultRow = await client.query(
-        `INSERT INTO commission (policy_id, brok_percent, tp_brok_percent, gst, remarks, status, set_by, approved_by, approved_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, ${approval.approvedAt ? 'CURRENT_TIMESTAMP' : 'NULL'})
+        `INSERT INTO commission (policy_id, brok_percent, tp_brok_percent, reward_percent, gst, remarks, status, set_by, approved_by, approved_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${approval.approvedAt ? 'CURRENT_TIMESTAMP' : 'NULL'})
          RETURNING id`,
-        [policyId, c.brok_percent, c.tp_brok_percent, c.gst, c.remarks, approval.status, req.employee.id, approval.approvedBy]
+        [policyId, c.brok_percent, c.tp_brok_percent, c.reward_percent, c.gst, c.remarks, approval.status, req.employee.id, approval.approvedBy]
       );
       await logChange(client, {
         entityType: 'commission',
@@ -361,6 +487,21 @@ async function create(req, res, next) {
         changes: diffFields(null, { ...c, status: approval.status }, [...COMMISSION_AUDIT_FIELDS, 'status']),
         employeeId: req.employee.id,
       });
+    }
+
+    if (linkedTask) {
+      await client.query(
+        `UPDATE tasks
+         SET outcome = 'converted', policy_id = $1, status = 'done',
+             completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [policyId, linkedTask.id]
+      );
+      await client.query(
+        `UPDATE documents SET entity_type = 'policy', entity_id = $1
+         WHERE entity_type = 'task' AND entity_id = $2`,
+        [policyId, linkedTask.id]
+      );
     }
 
     await client.query('COMMIT');
@@ -431,6 +572,9 @@ async function update(req, res, next) {
       [req.params.id]
     )).rows[0];
 
+    // status is never touched by a plain field update — it only ever
+    // changes via markLost() or the renewed-source flip in create() — so
+    // editing a policy's dates (or anything else) can never affect it.
     const columns = Object.keys(fields);
     let policyId = req.params.id;
 
@@ -498,14 +642,14 @@ async function update(req, res, next) {
         const c = commissionResult.row;
         const approval = commissionApprovalFor(req.employee);
         const commissionResultRow = await client.query(
-          `INSERT INTO commission (policy_id, brok_percent, tp_brok_percent, gst, remarks, status, set_by, approved_by, approved_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, ${approval.approvedAt ? 'CURRENT_TIMESTAMP' : 'NULL'})
+          `INSERT INTO commission (policy_id, brok_percent, tp_brok_percent, reward_percent, gst, remarks, status, set_by, approved_by, approved_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${approval.approvedAt ? 'CURRENT_TIMESTAMP' : 'NULL'})
            ON CONFLICT (policy_id) DO UPDATE
-           SET brok_percent = $2, tp_brok_percent = $3, gst = $4, remarks = $5,
-               status = $6, set_by = $7, approved_by = $8,
+           SET brok_percent = $2, tp_brok_percent = $3, reward_percent = $4, gst = $5, remarks = $6,
+               status = $7, set_by = $8, approved_by = $9,
                approved_at = ${approval.approvedAt ? 'CURRENT_TIMESTAMP' : 'NULL'}, approver_remarks = NULL
            RETURNING id`,
-          [req.params.id, c.brok_percent, c.tp_brok_percent, c.gst, c.remarks, approval.status, req.employee.id, approval.approvedBy]
+          [req.params.id, c.brok_percent, c.tp_brok_percent, c.reward_percent, c.gst, c.remarks, approval.status, req.employee.id, approval.approvedBy]
         );
         await logChange(client, {
           entityType: 'commission',
@@ -557,4 +701,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, remove, getFinance, getRenewalsDue };
+module.exports = { list, getById, create, update, remove, getFinance, getRenewalsDue, markLost };

@@ -3,15 +3,13 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api from '../api/axios';
 import Layout from '../components/Layout';
 import CustomerPicker from '../components/CustomerPicker';
-import PremiumsModal, { computeNetPremium } from '../components/PremiumsModal';
-import CommissionModal from '../components/CommissionModal';
+import PremiumsFields, { computeNetPremium } from '../components/PremiumsFields';
+import CommissionFields from '../components/CommissionFields';
 import RiskDetailsModal from '../components/RiskDetailsModal';
 import DocumentsPanel from '../components/DocumentsPanel';
 import { getRiskFields } from '../riskSchemas';
 import { useAuth } from '../context/AuthContext';
-
-const TYPE_OF_BUSINESS_OPTIONS = ['new', 'old', 'renewal'];
-const STATUS_OPTIONS = ['Active', 'Expired', 'Cancelled', 'Lapsed'];
+import { uploadFiles } from '../utils/uploadFiles';
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -33,7 +31,13 @@ function addOneDayIso(fromIsoDate) {
 }
 
 // A new policy defaults to starting today and running a year — both stay
-// editable, this just saves re-typing the common case.
+// editable, this just saves re-typing the common case. Type of business
+// defaults to 'new' here and is never hand-picked — it's set to 'old' on
+// the renewal-prefill path below instead. Status isn't entered here at
+// all; the backend always creates a policy as 'Active' — it only ever
+// becomes 'Renewed' or 'Not Renewed' later, from the Renewals page.
+// Assigned employee isn't entered here either — the backend sets it to
+// whoever is creating the policy (see policyController.create).
 function getEmptyForm() {
   const start = todayIsoDate();
   return {
@@ -50,9 +54,7 @@ function getEmptyForm() {
     policy_end_date: oneYearCoverEndIsoDate(start),
     renewable: true,
     issued_from_branch_id: '',
-    user_id: '',
     telecaller: '',
-    status: 'Active',
     remarks: '',
   };
 }
@@ -62,12 +64,10 @@ const EMPTY_PAYMENT_FORM = {
   customer_bank_account_id: '',
   customer_payment_date: todayIsoDate(),
   customer_reference_id: '',
-  customer_remarks: '',
 
   insurer_bank_account_id: '',
   insurer_payment_date: todayIsoDate(),
   insurer_reference_id: '',
-  insurer_remarks: '',
 
   adjustment_type: 'discount',
   adjustment_amount: '',
@@ -92,20 +92,21 @@ export default function PolicyForm() {
   const [branches, setBranches] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [premiumRows, setPremiumRows] = useState([]);
-  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
   const [commission, setCommission] = useState(null);
   const [commissionTouched, setCommissionTouched] = useState(false);
-  const [commissionModalOpen, setCommissionModalOpen] = useState(false);
   const [riskDetails, setRiskDetails] = useState({});
   const [riskDetailsModalOpen, setRiskDetailsModalOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState(EMPTY_PAYMENT_FORM);
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [loading, setLoading] = useState(isEdit || Boolean(renewFromId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [renewSource, setRenewSource] = useState(null);
   const [renewedFrom, setRenewedFrom] = useState(null);
   const [renewedTo, setRenewedTo] = useState(null);
+  const [openTasks, setOpenTasks] = useState([]);
+  const [fromTaskId, setFromTaskId] = useState('');
 
   useEffect(() => {
     api.get('/lookups/insurers').then((res) => setInsurers(res.data));
@@ -114,6 +115,7 @@ export default function PolicyForm() {
     api.get('/lookups/employees').then((res) => setEmployees(res.data));
     if (!isEdit) {
       api.get('/lookups/bank-accounts').then((res) => setBankAccounts(res.data));
+      api.get('/tasks/mine').then((res) => setOpenTasks(res.data.filter((t) => t.outcome === 'pending')));
     }
   }, [isEdit]);
 
@@ -137,9 +139,7 @@ export default function PolicyForm() {
           policy_end_date: p.policy_end_date ? p.policy_end_date.slice(0, 10) : '',
           renewable: p.renewable ?? true,
           issued_from_branch_id: p.issued_from_branch_id || '',
-          user_id: p.user_id || '',
           telecaller: p.telecaller || '',
-          status: p.status || 'Active',
           remarks: p.remarks || '',
         });
         setRiskDetails(p.risk_details || {});
@@ -173,15 +173,13 @@ export default function PolicyForm() {
           insurer_branch_id: p.insurer_branch_id || '',
           vertical_id: p.vertical_id || '',
           sub_vertical_id: p.sub_vertical_id || '',
-          type_of_business: 'renewal',
+          type_of_business: 'old',
           sum_insured: p.sum_insured || '',
           policy_start_date: start,
           policy_end_date: oneYearCoverEndIsoDate(start),
           renewable: true,
           issued_from_branch_id: p.issued_from_branch_id || '',
-          user_id: p.user_id || '',
           telecaller: p.telecaller || '',
-          status: 'Active',
         }));
         setPremiumRows(
           premiumsRes.data.map((r) => ({
@@ -238,8 +236,22 @@ export default function PolicyForm() {
     if (name === 'vertical_id' || name === 'sub_vertical_id') {
       setRiskDetails({});
     }
+    // Premium/commission shape (OD+TP vs a single net figure) is decided by
+    // whether the vertical is Motor — switching away from/into Motor drops
+    // whichever rows no longer apply rather than leaving mismatched data
+    // sitting in state unseen.
+    if (name === 'vertical_id') {
+      const nowMotor = verticals.find((v) => String(v.id) === String(value))?.name === 'Motor';
+      const validCoverages = nowMotor ? ['OD', 'TP'] : ['NET'];
+      setPremiumRows((rows) => rows.filter((r) => validCoverages.includes((r.coverage || '').toUpperCase())));
+      if (!nowMotor) {
+        setCommission((c) => (c ? { ...c, tp_brok_percent: null } : c));
+      }
+    }
   }
 
+  const selectedVertical = verticals.find((v) => String(v.id) === String(form.vertical_id));
+  const isMotor = selectedVertical?.name === 'Motor';
   const selectedSubVertical = subVerticals.find((sv) => String(sv.id) === String(form.sub_vertical_id));
   const riskFields = selectedSubVertical ? getRiskFields(selectedSubVertical.name) : null;
   const riskDetailsFilledCount = riskFields
@@ -251,6 +263,22 @@ export default function PolicyForm() {
 
   function handleCustomerSelect(customerId, label) {
     setForm((f) => ({ ...f, customer_id: customerId || '', customer_label: label }));
+  }
+
+  // Files picked before the policy exists yet — held here and uploaded
+  // right after creation succeeds (see handleSubmit), once there's a
+  // policy id to attach them to.
+  function handlePendingFilesSelected(e) {
+    // Read the files synchronously here, before clearing the input below —
+    // the functional setState updater can run after this handler returns,
+    // by which point e.target.files would already be empty if read there.
+    const selected = Array.from(e.target.files || []);
+    setPendingFiles((prev) => [...prev, ...selected]);
+    e.target.value = '';
+  }
+
+  function removePendingFile(index) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleCommissionDecision(decision) {
@@ -292,7 +320,6 @@ export default function PolicyForm() {
         bank_account_id: paymentForm.customer_bank_account_id,
         payment_date: paymentForm.customer_payment_date,
         reference_id: paymentForm.customer_reference_id || null,
-        remarks: paymentForm.customer_remarks || null,
         allocations: [{ policy_id: policyId, amount: paymentForm.customer_amount }],
       });
     }
@@ -303,7 +330,6 @@ export default function PolicyForm() {
         bank_account_id: paymentForm.insurer_bank_account_id,
         payment_date: paymentForm.insurer_payment_date,
         reference_id: paymentForm.insurer_reference_id || null,
-        remarks: paymentForm.insurer_remarks || null,
       });
     }
     if (Number(paymentForm.adjustment_amount) > 0) {
@@ -330,7 +356,7 @@ export default function PolicyForm() {
       return;
     }
     if (premiumRows.length === 0) {
-      setError('Add at least one premium coverage — use "Manage premiums" below.');
+      setError('Add at least one premium coverage in the "Premium coverages" section below.');
       return;
     }
     if (!isEdit) {
@@ -362,6 +388,9 @@ export default function PolicyForm() {
     if (renewFromId) {
       payload.renewed_from_policy_id = renewFromId;
     }
+    if (!isEdit && fromTaskId) {
+      payload.from_task_id = fromTaskId;
+    }
 
     try {
       if (isEdit) {
@@ -371,12 +400,16 @@ export default function PolicyForm() {
         const res = await api.post('/policies', payload);
         try {
           await recordPayments(res.data.id, form.customer_id);
+          if (pendingFiles.length > 0) {
+            await uploadFiles(pendingFiles, 'policy', res.data.id);
+          }
           navigate('/policies');
-        } catch (paymentErr) {
-          // Policy was created; only the payment step failed — send them to
-          // the policy's finance page (carrying the error along) so nothing
-          // recorded is lost from view and they can retry from there.
-          const message = paymentErr.response?.data?.error || 'Policy was created, but the payment could not be recorded.';
+        } catch (followUpErr) {
+          // Policy was created; only a follow-up step (payment or document
+          // upload) failed — send them to the policy's own page (carrying
+          // the error along) so nothing recorded is lost from view and they
+          // can retry from there.
+          const message = followUpErr.response?.data?.error || 'Policy was created, but the payment or documents could not be recorded.';
           navigate(`/policies/${res.data.id}/finance`, { state: { error: message } });
         }
       }
@@ -442,6 +475,23 @@ export default function PolicyForm() {
             <label>Policy number *</label>
             <input name="policy_number" value={form.policy_number} onChange={handleChange} required />
           </div>
+
+          {!isEdit && !renewFromId && openTasks.length > 0 && (
+            <div className="field field-wide">
+              <label>This policy is for task</label>
+              <select value={fromTaskId} onChange={(e) => setFromTaskId(e.target.value)}>
+                <option value="">— not linked to a task —</option>
+                {openTasks.map((t) => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+              {fromTaskId && (
+                <p className="subtitle" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
+                  On save, that task's documents move onto this policy and it's marked converted.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="field">
             <label>Customer *</label>
@@ -518,80 +568,11 @@ export default function PolicyForm() {
           )}
 
           <div className="field">
-            <label>Type of business</label>
-            <select name="type_of_business" value={form.type_of_business} onChange={handleChange}>
-              {TYPE_OF_BUSINESS_OPTIONS.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label>Status</label>
-            <select name="status" value={form.status} onChange={handleChange}>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
             <label>Sum insured</label>
             <input
               type="number" step="0.01" min="0"
               name="sum_insured" value={form.sum_insured} onChange={handleChange}
             />
-          </div>
-
-          <div className="field">
-            <label>Premium amount *</label>
-            <div className="customer-picker-trigger">
-              <input
-                type="text"
-                readOnly
-                value={`₹${computeNetPremium(premiumRows).toLocaleString('en-IN')}`}
-                onClick={() => setPremiumModalOpen(true)}
-              />
-              <button type="button" className="btn-secondary" onClick={() => setPremiumModalOpen(true)}>
-                {premiumRows.length > 0 ? 'Manage premiums' : 'Add premiums'}
-              </button>
-            </div>
-            {premiumRows.length > 0 && (
-              <p className="subtitle" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
-                {premiumRows.length} coverage{premiumRows.length > 1 ? 's' : ''}
-              </p>
-            )}
-          </div>
-
-          <div className="field">
-            <label>Commission</label>
-            <button type="button" className="btn-secondary" onClick={() => setCommissionModalOpen(true)}>
-              {commission ? 'Edit commission' : 'Add commission'}
-            </button>
-            {commission && (
-              <p className="subtitle" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
-                Brokerage: {commission.brok_percent ?? '—'}%
-                {commission.tp_brok_percent ? `, TP: ${commission.tp_brok_percent}%` : ''}
-                , GST: {commission.gst}%
-                {' — '}
-                <span style={{
-                  color: commission.status === 'approved' ? '#15803d' : commission.status === 'rejected' ? '#b91c1c' : '#b45309',
-                  fontWeight: 600,
-                }}>
-                  {commission.status === 'approved' ? 'Approved' : commission.status === 'rejected' ? 'Rejected' : 'Pending approval'}
-                </span>
-              </p>
-            )}
-            {commission?.status === 'pending' && isChecker && (
-              <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem' }}>
-                <button type="button" className="btn-link" onClick={() => handleCommissionDecision('approved')}>
-                  Approve
-                </button>
-                <button type="button" className="btn-link" onClick={() => handleCommissionDecision('rejected')}>
-                  Reject
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="field">
@@ -622,16 +603,6 @@ export default function PolicyForm() {
           </div>
 
           <div className="field">
-            <label>Assigned employee</label>
-            <select name="user_id" value={form.user_id} onChange={handleChange}>
-              <option value="">—</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
             <label>Telecaller</label>
             <select name="telecaller" value={form.telecaller} onChange={handleChange}>
               <option value="">—</option>
@@ -646,6 +617,70 @@ export default function PolicyForm() {
             <input name="remarks" value={form.remarks} onChange={handleChange} maxLength={150} />
           </div>
         </div>
+
+        <h3 style={{ marginTop: '2rem', marginBottom: '0.75rem' }}>Premium coverages *</h3>
+        <PremiumsFields isMotor={isMotor} rows={premiumRows} onChange={setPremiumRows} />
+
+        <h3 style={{ marginTop: '2rem', marginBottom: '0.25rem' }}>Commission</h3>
+        <p className="subtitle" style={{ marginTop: 0 }}>Optional — leave blank if this policy doesn't earn brokerage.</p>
+        {commission && (
+          <p style={{ margin: '0 0 0.75rem' }}>
+            <span style={{
+              color: commission.status === 'approved' ? '#15803d' : commission.status === 'rejected' ? '#b91c1c' : '#b45309',
+              fontWeight: 600,
+            }}>
+              {commission.status === 'approved' ? 'Approved' : commission.status === 'rejected' ? 'Rejected' : 'Pending approval'}
+            </span>
+            {commission.status === 'pending' && isChecker && (
+              <span style={{ marginLeft: '0.75rem' }}>
+                <button type="button" className="btn-link" onClick={() => handleCommissionDecision('approved')}>
+                  Approve
+                </button>
+                {' · '}
+                <button type="button" className="btn-link" onClick={() => handleCommissionDecision('rejected')}>
+                  Reject
+                </button>
+              </span>
+            )}
+          </p>
+        )}
+        <CommissionFields
+          isMotor={isMotor}
+          commission={commission}
+          onChange={(next) => {
+            setCommission(next);
+            setCommissionTouched(true);
+          }}
+        />
+
+        {!isEdit && (
+          <>
+            <h3 style={{ marginTop: '2rem', marginBottom: '0.25rem' }}>Documents</h3>
+            <p className="subtitle" style={{ marginTop: 0 }}>
+              Optional — attach policy documents now, or add them later from this policy's page.
+            </p>
+            <label className="btn-secondary" style={{ display: 'inline-block', cursor: 'pointer' }}>
+              + Add files
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={handlePendingFilesSelected}
+                style={{ display: 'none' }}
+              />
+            </label>
+            {pendingFiles.length > 0 && (
+              <ul style={{ marginTop: '0.6rem', paddingLeft: '1.2rem' }}>
+                {pendingFiles.map((f, i) => (
+                  <li key={i} style={{ marginBottom: '0.2rem' }}>
+                    {f.name}{' '}
+                    <button type="button" className="btn-link" onClick={() => removePendingFile(i)}>Remove</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
 
         {!isEdit && (
           <>
@@ -680,10 +715,6 @@ export default function PolicyForm() {
                 <label>Reference / cheque no.</label>
                 <input name="customer_reference_id" value={paymentForm.customer_reference_id} onChange={handlePaymentChange} maxLength={100} />
               </div>
-              <div className="field field-wide">
-                <label>Remarks</label>
-                <input name="customer_remarks" value={paymentForm.customer_remarks} onChange={handlePaymentChange} maxLength={255} />
-              </div>
             </div>
 
             <h4 style={{ marginTop: '1.5rem', marginBottom: '0.6rem' }}>Insurer payment</h4>
@@ -712,10 +743,6 @@ export default function PolicyForm() {
               <div className="field">
                 <label>Reference / cheque no.</label>
                 <input name="insurer_reference_id" value={paymentForm.insurer_reference_id} onChange={handlePaymentChange} maxLength={100} />
-              </div>
-              <div className="field field-wide">
-                <label>Remarks</label>
-                <input name="insurer_remarks" value={paymentForm.insurer_remarks} onChange={handlePaymentChange} maxLength={255} />
               </div>
             </div>
 
@@ -764,27 +791,6 @@ export default function PolicyForm() {
           </button>
         </div>
       </form>
-
-      <PremiumsModal
-        open={premiumModalOpen}
-        initialRows={premiumRows}
-        onClose={() => setPremiumModalOpen(false)}
-        onSave={(rows) => {
-          setPremiumRows(rows);
-          setPremiumModalOpen(false);
-        }}
-      />
-
-      <CommissionModal
-        open={commissionModalOpen}
-        initialCommission={commission}
-        onClose={() => setCommissionModalOpen(false)}
-        onSave={(result) => {
-          setCommission(result);
-          setCommissionTouched(true);
-          setCommissionModalOpen(false);
-        }}
-      />
 
       <RiskDetailsModal
         open={riskDetailsModalOpen}

@@ -1,0 +1,533 @@
+<title>InsuranceCRM Module Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#eef1f6; --panel:#ffffff; --panel-2:#f5f7fa; --border:#d7dee8;
+    --text:#161e2b; --text-muted:#5c6a80; --text-faint:#93a0b3;
+    --accent:#a8730f; --accent-soft:#f1e2c4;
+    --cat-root:#2c3746; --cat-controllers:#2f6fb0; --cat-routes:#7b4fb5;
+    --cat-middleware:#b5432f; --cat-config:#1f8a7a; --cat-scripts:#5b6470;
+    --cat-utils:#3f8f4f; --cat-pages:#2f6fb0; --cat-components:#1f8a9c;
+    --cat-api:#b8860b; --cat-context:#b5416f;
+    --hl-out:#a8730f; --hl-in:#1f8a9c;
+    --shadow:0 8px 28px rgba(20,30,50,.10), 0 2px 6px rgba(20,30,50,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1520; --panel:#161f2d; --panel-2:#1b2536; --border:#2b3850;
+      --text:#e8edf5; --text-muted:#93a3bb; --text-faint:#5c6a80;
+      --accent:#e6ae4a; --accent-soft:#3a2f18;
+      --cat-root:#c9d4e3; --cat-controllers:#72b2ee; --cat-routes:#bd9aef;
+      --cat-middleware:#ec8770; --cat-config:#5fd0bb; --cat-scripts:#a3adbb;
+      --cat-utils:#7ed08e; --cat-pages:#72b2ee; --cat-components:#5fd0e0;
+      --cat-api:#e6ae4a; --cat-context:#e888ae;
+      --hl-out:#e6ae4a; --hl-in:#5fd0e0;
+      --shadow:0 8px 28px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1520; --panel:#161f2d; --panel-2:#1b2536; --border:#2b3850;
+    --text:#e8edf5; --text-muted:#93a3bb; --text-faint:#5c6a80;
+    --accent:#e6ae4a; --accent-soft:#3a2f18;
+    --cat-root:#c9d4e3; --cat-controllers:#72b2ee; --cat-routes:#bd9aef;
+    --cat-middleware:#ec8770; --cat-config:#5fd0bb; --cat-scripts:#a3adbb;
+    --cat-utils:#7ed08e; --cat-pages:#72b2ee; --cat-components:#5fd0e0;
+    --cat-api:#e6ae4a; --cat-context:#e888ae;
+    --hl-out:#e6ae4a; --hl-in:#5fd0e0;
+    --shadow:0 8px 28px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    height:100vh; overflow:hidden;
+  }
+  .app{ display:flex; height:100vh; height:100dvh; }
+
+  /* ---------- sidebar ---------- */
+  .sidebar{
+    width:320px; min-width:320px; background:var(--panel);
+    border-right:1px solid var(--border); display:flex; flex-direction:column;
+    overflow-y:auto;
+  }
+  .sidebar-inner{ padding:20px 18px 16px; display:flex; flex-direction:column; gap:16px; }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand-eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--accent); font-weight:600;
+  }
+  .brand h1{ font-size:19px; margin:0; font-weight:700; letter-spacing:-.01em; }
+  .brand p{ margin:4px 0 0; font-size:12.5px; color:var(--text-muted); line-height:1.5; }
+
+  .tabs{ display:flex; gap:6px; background:var(--panel-2); padding:3px; border-radius:8px; border:1px solid var(--border); }
+  .tab{
+    flex:1; text-align:center; padding:7px 0; font-size:12.5px; font-weight:600;
+    border-radius:6px; cursor:pointer; color:var(--text-muted); user-select:none;
+    font-family:"IBM Plex Mono",monospace;
+  }
+  .tab.active{ background:var(--panel); color:var(--text); box-shadow:var(--shadow); }
+
+  .search-wrap{ position:relative; }
+  .search-wrap input{
+    width:100%; padding:8px 10px 8px 30px; border-radius:7px; border:1px solid var(--border);
+    background:var(--panel-2); color:var(--text); font-size:12.5px; font-family:"IBM Plex Mono",monospace;
+  }
+  .search-wrap input:focus{ outline:2px solid var(--accent); outline-offset:-1px; }
+  .search-wrap svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); opacity:.55; }
+
+  .stats-row{ display:flex; gap:8px; font-family:"IBM Plex Mono",monospace; }
+  .stat-tile{
+    flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:7px;
+    padding:8px 10px;
+  }
+  .stat-tile .v{ font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .stat-tile .l{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:1px; }
+
+  .section-label{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-faint);
+    font-weight:600; margin:2px 0 -4px;
+  }
+
+  .legend{ display:flex; flex-direction:column; gap:3px; }
+  .legend-item{
+    display:flex; align-items:center; gap:8px; padding:5px 7px; border-radius:6px; cursor:pointer;
+    font-size:12px; user-select:none; border:1px solid transparent;
+  }
+  .legend-item:hover{ background:var(--panel-2); }
+  .legend-item.off{ opacity:.38; }
+  .legend-swatch{ width:9px; height:9px; border-radius:2.5px; flex:none; }
+  .legend-name{ font-family:"IBM Plex Mono",monospace; flex:1; }
+  .legend-count{ font-family:"IBM Plex Mono",monospace; color:var(--text-faint); font-size:11px; }
+
+  .hint{ font-size:11.5px; color:var(--text-faint); line-height:1.6; border-top:1px dashed var(--border); padding-top:12px; }
+  .hint b{ color:var(--text-muted); }
+
+  /* ---------- detail panel ---------- */
+  .detail{
+    border-top:1px solid var(--border); background:var(--panel-2);
+    padding:16px 18px; display:none; flex-direction:column; gap:10px;
+  }
+  .detail.show{ display:flex; }
+  .detail-file{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600; word-break:break-all; }
+  .detail-file .dir{ color:var(--text-faint); font-weight:400; }
+  .detail-cat{
+    display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted);
+    font-family:"IBM Plex Mono",monospace;
+  }
+  .detail-cat .dot{ width:7px; height:7px; border-radius:50%; }
+  .detail-list-label{ font-size:11px; font-weight:600; color:var(--text-muted); margin-top:2px; display:flex; align-items:center; gap:6px; }
+  .detail-list-label .sw{ width:8px; height:2px; }
+  .detail-list{ display:flex; flex-direction:column; gap:1px; max-height:120px; overflow-y:auto; }
+  .detail-list button{
+    all:unset; cursor:pointer; font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+    padding:3px 6px; border-radius:5px; color:var(--text);
+  }
+  .detail-list button:hover{ background:var(--panel); }
+  .detail-empty{ font-size:11.5px; color:var(--text-faint); font-style:italic; }
+  .clear-btn{
+    all:unset; cursor:pointer; font-size:11.5px; color:var(--accent); font-weight:600;
+    align-self:flex-start;
+  }
+
+  /* ---------- canvas ---------- */
+  .canvas-wrap{ flex:1; position:relative; background:
+      radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/22px 22px,
+      var(--bg);
+  }
+  svg#graph{ width:100%; height:100%; display:block; cursor:grab; }
+  svg#graph.panning{ cursor:grabbing; }
+
+  .node circle{ stroke:var(--panel); stroke-width:1.6px; cursor:pointer; transition:opacity .15s; }
+  .node text{
+    font-family:"IBM Plex Mono",monospace; font-size:9.5px; fill:var(--text-muted);
+    paint-order:stroke; stroke:var(--bg); stroke-width:3px; pointer-events:none;
+    transition:opacity .15s;
+  }
+  .node.hl-self circle{ stroke:var(--accent); stroke-width:3px; }
+  .node.hl-self text{ fill:var(--text); font-weight:600; }
+  .node.hl-out text{ fill:var(--hl-out); font-weight:600; }
+  .node.hl-in text{ fill:var(--hl-in); font-weight:600; }
+  .node.dim circle{ opacity:.14; }
+  .node.dim text{ opacity:.12; }
+  .node.match circle{ stroke:var(--accent); stroke-width:2.5px; }
+
+  .link{ stroke:var(--text-faint); stroke-opacity:.38; fill:none; transition:opacity .15s, stroke .15s; }
+  .link.hl-out{ stroke:var(--hl-out); stroke-opacity:.9; stroke-width:1.6px; }
+  .link.hl-in{ stroke:var(--hl-in); stroke-opacity:.9; stroke-width:1.6px; }
+  .link.dim{ stroke-opacity:.05; }
+
+  .toolbar{
+    position:absolute; top:14px; right:14px; display:flex; gap:6px; z-index:5;
+  }
+  .tbtn{
+    all:unset; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadow);
+    border-radius:7px; padding:7px 11px; font-size:11.5px; font-weight:600; cursor:pointer;
+    color:var(--text-muted); font-family:"IBM Plex Mono",monospace;
+  }
+  .tbtn:hover{ color:var(--text); }
+
+  .caption{
+    position:absolute; left:14px; bottom:12px; font-size:11px; color:var(--text-faint);
+    font-family:"IBM Plex Mono",monospace; max-width:60%; line-height:1.5;
+  }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+
+  @media (max-width: 760px){
+    .app{ flex-direction:column; }
+    .sidebar{ width:100%; min-width:0; max-height:46vh; border-right:none; border-bottom:1px solid var(--border); }
+    .canvas-wrap{ flex:1; min-height:40vh; }
+    .caption{ display:none; }
+  }
+</style>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+      <div class="brand">
+        <span class="brand-eyebrow">insurance-crm &middot; static analysis</span>
+        <h1>Module map</h1>
+        <p>Every local <code>require()</code>/<code>import</code> edge, extracted straight from the source &mdash; not hand-drawn. Click a file to trace it; drag to rearrange; scroll to zoom.</p>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-side="backend">backend</div>
+        <div class="tab" data-side="frontend">frontend</div>
+      </div>
+
+      <div class="search-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="search" type="text" placeholder="Filter by filename&hellip;" autocomplete="off">
+      </div>
+
+      <div class="stats-row" id="stats">
+        <div class="stat-tile"><div class="v" id="stat-nodes">&mdash;</div><div class="l">files</div></div>
+        <div class="stat-tile"><div class="v" id="stat-edges">&mdash;</div><div class="l">imports</div></div>
+        <div class="stat-tile"><div class="v" id="stat-hub">&mdash;</div><div class="l">busiest</div></div>
+      </div>
+
+      <div class="section-label">Layers</div>
+      <div class="legend" id="legend"></div>
+
+      <div class="hint">
+        <b>Click</b> a node to see what it imports (amber) and what imports it (cyan) &middot; <b>click empty space</b> to clear &middot; a layer name in Layers <b>toggles</b> it off.
+      </div>
+    </div>
+
+    <div class="detail" id="detail">
+      <div>
+        <div class="detail-cat" id="detail-cat"><span class="dot"></span><span id="detail-cat-name"></span></div>
+        <div class="detail-file" id="detail-file"></div>
+      </div>
+      <div>
+        <div class="detail-list-label"><span class="sw" style="background:var(--hl-out)"></span><span id="detail-out-label">imports</span></div>
+        <div class="detail-list" id="detail-out"></div>
+      </div>
+      <div>
+        <div class="detail-list-label"><span class="sw" style="background:var(--hl-in)"></span><span id="detail-in-label">imported by</span></div>
+        <div class="detail-list" id="detail-in"></div>
+      </div>
+      <button class="clear-btn" id="clear-selection">Clear selection</button>
+    </div>
+  </aside>
+
+  <main class="canvas-wrap">
+    <div class="toolbar">
+      <button class="tbtn" id="btn-fit">Fit</button>
+      <button class="tbtn" id="btn-reset">Reset</button>
+    </div>
+    <svg id="graph"></svg>
+    <div class="caption" id="caption"></div>
+  </main>
+</div>
+
+<script type="application/json" id="graph-data">
+__GRAPH_JSON__
+</script>
+
+<script>
+(function(){
+  "use strict";
+  const DATA = JSON.parse(document.getElementById('graph-data').textContent);
+
+  const CAT_LABELS = {
+    root: 'entry point', controllers: 'controllers', routes: 'routes',
+    middleware: 'middleware', config: 'config', scripts: 'scripts', utils: 'utils',
+    pages: 'pages', components: 'components', api: 'api', context: 'context'
+  };
+  const CAT_ORDER = {
+    backend: ['root','routes','controllers','middleware','utils','config','scripts'],
+    frontend: ['root','pages','components','context','api','utils']
+  };
+
+  function catColor(cat){ return getComputedStyle(document.documentElement).getPropertyValue('--cat-' + cat).trim(); }
+  function dirOf(id){ const p = id.split('/'); p.pop(); return p.join('/') + '/'; }
+
+  let side = 'backend';
+  let categoryOff = new Set();
+  let selectedId = null;
+  let searchQuery = '';
+
+  const svg = d3.select('#graph');
+  const defs = svg.append('defs');
+  defs.append('marker')
+    .attr('id','arrow').attr('viewBox','0 0 10 10').attr('refX', 9).attr('refY', 5)
+    .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient','auto-start-reverse')
+    .append('path').attr('d','M 0 0 L 10 5 L 0 10 z').attr('fill','var(--text-faint)');
+
+  const zoomLayer = svg.append('g').attr('class','zoom-layer');
+  const linkLayer = zoomLayer.append('g').attr('class','links');
+  const nodeLayer = zoomLayer.append('g').attr('class','nodes');
+
+  const zoom = d3.zoom().scaleExtent([0.15, 5]).on('zoom', (ev) => {
+    zoomLayer.attr('transform', ev.transform);
+  });
+  svg.call(zoom)
+    .on('dblclick.zoom', null)
+    .on('mousedown.cursor', () => svg.classed('panning', true))
+    .on('mouseup.cursor', () => svg.classed('panning', false));
+  svg.on('click', (ev) => { if (ev.target.tagName === 'svg') selectNode(null); });
+
+  let simulation = null;
+  let nodesById = new Map();
+  let currentNodes = [], currentEdges = [];
+
+  function degreeInfo(nodes, edges){
+    const outD = new Map(), inD = new Map();
+    nodes.forEach(n => { outD.set(n.id,0); inD.set(n.id,0); });
+    edges.forEach(e => {
+      outD.set(e.source, (outD.get(e.source)||0)+1);
+      inD.set(e.target, (inD.get(e.target)||0)+1);
+    });
+    return { outD, inD };
+  }
+
+  function buildAdjacency(edges){
+    const out = new Map(), inc = new Map();
+    edges.forEach(e => {
+      if (!out.has(e.source)) out.set(e.source, []);
+      if (!inc.has(e.target)) inc.set(e.target, []);
+      out.get(e.source).push(e.target);
+      inc.get(e.target).push(e.source);
+    });
+    return { out, inc };
+  }
+  let adjacency = { out: new Map(), inc: new Map() };
+
+  function render(newSide){
+    side = newSide;
+    categoryOff = new Set();
+    selectedId = null;
+    searchQuery = '';
+    document.getElementById('search').value = '';
+    document.getElementById('detail').classList.remove('show');
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.side === side));
+
+    const raw = DATA[side];
+    const { outD, inD } = degreeInfo(raw.nodes, raw.edges);
+    currentNodes = raw.nodes.map(n => ({...n, out: outD.get(n.id)||0, in: inD.get(n.id)||0, degree: (outD.get(n.id)||0)+(inD.get(n.id)||0)}));
+    currentEdges = raw.edges.map(e => ({...e}));
+    nodesById = new Map(currentNodes.map(n => [n.id, n]));
+    adjacency = buildAdjacency(currentEdges);
+
+    document.getElementById('stat-nodes').textContent = currentNodes.length;
+    document.getElementById('stat-edges').textContent = currentEdges.length;
+    const hub = currentNodes.slice().sort((a,b)=>b.degree-a.degree)[0];
+    document.getElementById('stat-hub').textContent = hub ? hub.label.replace(/\.(jsx?|js)$/,'') : '—';
+    document.getElementById('stat-hub').title = hub ? hub.id : '';
+
+    document.getElementById('caption').textContent =
+      side === 'backend'
+        ? 'server.js → app.js → routes/index.js → route files → controllers → utils/db.js'
+        : 'main.jsx → App.jsx → pages → shared components → api/axios.js';
+
+    buildLegend();
+    buildSimulation();
+  }
+
+  function buildLegend(){
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
+    const counts = {};
+    currentNodes.forEach(n => counts[n.category] = (counts[n.category]||0) + 1);
+    (CAT_ORDER[side]||Object.keys(counts)).forEach(cat => {
+      if (!counts[cat]) return;
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      item.innerHTML = `<span class="legend-swatch" style="background:${catColor(cat)}"></span>` +
+        `<span class="legend-name">${CAT_LABELS[cat]||cat}</span>` +
+        `<span class="legend-count">${counts[cat]}</span>`;
+      item.addEventListener('click', () => {
+        if (categoryOff.has(cat)) categoryOff.delete(cat); else categoryOff.add(cat);
+        item.classList.toggle('off', categoryOff.has(cat));
+        applyVisualState();
+      });
+      legend.appendChild(item);
+    });
+  }
+
+  function radius(n){ return Math.max(4.5, Math.min(15, 4 + Math.sqrt(n.degree) * 2.1)); }
+
+  function buildSimulation(){
+    if (simulation) simulation.stop();
+    linkLayer.selectAll('*').remove();
+    nodeLayer.selectAll('*').remove();
+
+    const rect = svg.node().getBoundingClientRect();
+    const W = Math.max(rect.width, 600), H = Math.max(rect.height, 500);
+
+    const linkSel = linkLayer.selectAll('line.link')
+      .data(currentEdges)
+      .join('line')
+      .attr('class','link')
+      .attr('marker-end','url(#arrow)');
+
+    const nodeSel = nodeLayer.selectAll('g.node')
+      .data(currentNodes, d => d.id)
+      .join('g')
+      .attr('class','node')
+      .call(d3.drag()
+        .on('start', (ev,d) => { if (!ev.active) simulation.alphaTarget(0.25).restart(); d.fx=d.x; d.fy=d.y; })
+        .on('drag', (ev,d) => { d.fx=ev.x; d.fy=ev.y; })
+        .on('end', (ev,d) => { if (!ev.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }))
+      .on('click', (ev,d) => { ev.stopPropagation(); selectNode(d.id); })
+      .on('mouseenter', function(ev,d){ if (!selectedId) hoverHighlight(d.id); })
+      .on('mouseleave', function(){ if (!selectedId) applyVisualState(); });
+
+    nodeSel.append('circle')
+      .attr('r', radius)
+      .attr('fill', d => catColor(d.category));
+
+    nodeSel.append('text')
+      .attr('x', d => radius(d) + 4)
+      .attr('y', 3.2)
+      .text(d => d.label);
+
+    simulation = d3.forceSimulation(currentNodes)
+      .force('link', d3.forceLink(currentEdges).id(d=>d.id).distance(52).strength(0.55))
+      .force('charge', d3.forceManyBody().strength(-190))
+      .force('collide', d3.forceCollide(d => radius(d)+30))
+      .force('x', d3.forceX(W/2).strength(0.045))
+      .force('y', d3.forceY(H/2).strength(0.045))
+      .on('tick', () => {
+        linkSel
+          .attr('x1', d => nodesById.get(d.source.id||d.source).x)
+          .attr('y1', d => nodesById.get(d.source.id||d.source).y)
+          .attr('x2', d => nodesById.get(d.target.id||d.target).x)
+          .attr('y2', d => nodesById.get(d.target.id||d.target).y);
+        nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+
+    // settle quietly, then let the visible tail of motion be the "load" moment
+    simulation.alpha(1).restart();
+    setTimeout(fitToView, 900);
+  }
+
+  function hoverHighlight(id){
+    const outs = new Set(adjacency.out.get(id)||[]);
+    const ins = new Set(adjacency.inc.get(id)||[]);
+    nodeLayer.selectAll('g.node')
+      .classed('hl-self', d => d.id===id)
+      .classed('hl-out', d => outs.has(d.id))
+      .classed('hl-in', d => ins.has(d.id))
+      .classed('dim', d => d.id!==id && !outs.has(d.id) && !ins.has(d.id));
+    linkLayer.selectAll('line.link')
+      .classed('hl-out', d => (d.source.id||d.source)===id)
+      .classed('hl-in', d => (d.target.id||d.target)===id)
+      .classed('dim', d => (d.source.id||d.source)!==id && (d.target.id||d.target)!==id);
+  }
+
+  function selectNode(id){
+    selectedId = id;
+    if (!id){ applyVisualState(); document.getElementById('detail').classList.remove('show'); return; }
+    hoverHighlight(id);
+    showDetail(id);
+  }
+
+  function showDetail(id){
+    const n = nodesById.get(id);
+    const panel = document.getElementById('detail');
+    panel.classList.add('show');
+    document.getElementById('detail-cat-name').textContent = CAT_LABELS[n.category]||n.category;
+    document.querySelector('#detail-cat .dot').style.background = catColor(n.category);
+    document.getElementById('detail-file').innerHTML = `<span class="dir">${dirOf(n.id)}</span>${n.label}`;
+
+    const outs = (adjacency.out.get(id)||[]).slice().sort();
+    const ins = (adjacency.inc.get(id)||[]).slice().sort();
+    document.getElementById('detail-out-label').textContent = `imports (${outs.length})`;
+    document.getElementById('detail-in-label').textContent = `imported by (${ins.length})`;
+
+    function fillList(el, ids){
+      el.innerHTML = '';
+      if (ids.length===0){ el.innerHTML = '<div class="detail-empty">none</div>'; return; }
+      ids.forEach(tid => {
+        const btn = document.createElement('button');
+        btn.textContent = nodesById.get(tid).label;
+        btn.title = tid;
+        btn.addEventListener('click', () => selectNode(tid));
+        el.appendChild(btn);
+      });
+    }
+    fillList(document.getElementById('detail-out'), outs);
+    fillList(document.getElementById('detail-in'), ins);
+  }
+
+  function applyVisualState(){
+    const q = searchQuery.trim().toLowerCase();
+    nodeLayer.selectAll('g.node')
+      .classed('hl-self', false).classed('hl-out', false).classed('hl-in', false)
+      .classed('match', d => q && d.label.toLowerCase().includes(q))
+      .classed('dim', d => categoryOff.has(d.category) || (q && !d.label.toLowerCase().includes(q)))
+      .style('display', d => categoryOff.has(d.category) ? 'none' : null);
+    linkLayer.selectAll('line.link')
+      .classed('hl-out', false).classed('hl-in', false)
+      .classed('dim', d => categoryOff.has(nodesById.get(d.source.id||d.source).category) || categoryOff.has(nodesById.get(d.target.id||d.target).category))
+      .style('display', d => (categoryOff.has(nodesById.get(d.source.id||d.source).category) || categoryOff.has(nodesById.get(d.target.id||d.target).category)) ? 'none' : null);
+  }
+
+  document.getElementById('search').addEventListener('input', (ev) => {
+    searchQuery = ev.target.value;
+    selectedId = null;
+    document.getElementById('detail').classList.remove('show');
+    applyVisualState();
+  });
+
+  document.getElementById('clear-selection').addEventListener('click', () => selectNode(null));
+
+  document.getElementById('tabs').addEventListener('click', (ev) => {
+    const tab = ev.target.closest('.tab');
+    if (!tab || tab.dataset.side === side) return;
+    render(tab.dataset.side);
+  });
+
+  function fitToView(){
+    const rect = svg.node().getBoundingClientRect();
+    const xs = currentNodes.map(n=>n.x), ys = currentNodes.map(n=>n.y);
+    const minX = Math.min(...xs)-40, maxX = Math.max(...xs)+40;
+    const minY = Math.min(...ys)-40, maxY = Math.max(...ys)+40;
+    const w = maxX-minX, h = maxY-minY;
+    const scale = Math.max(0.15, Math.min(2.2, 0.92 / Math.max(w/rect.width, h/rect.height)));
+    const tx = rect.width/2 - scale*(minX+maxX)/2;
+    const ty = rect.height/2 - scale*(minY+maxY)/2;
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+  }
+
+  document.getElementById('btn-fit').addEventListener('click', fitToView);
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('search').value=''; searchQuery='';
+    categoryOff = new Set();
+    document.querySelectorAll('.legend-item').forEach(el => el.classList.remove('off'));
+    selectNode(null);
+    applyVisualState();
+    fitToView();
+  });
+
+  window.addEventListener('resize', () => { if (simulation) simulation.alpha(0.15).restart(); });
+
+  render('backend');
+})();
+</script>

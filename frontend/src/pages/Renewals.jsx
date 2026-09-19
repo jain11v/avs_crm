@@ -20,10 +20,20 @@ function daysUntil(dateStr) {
   return Math.round(diff);
 }
 
-// Policies due for renewal — renewable, still Active or already Expired,
-// due within the chosen window, and not already renewed. Renewing one takes
-// you to a pre-filled "Add policy" form (customer, insurer, coverage, and
-// commission carried over) rather than a separate flow.
+// Status values are plain English (e.g. "Not Renewed") but CSS classes
+// can't contain spaces — slugify before building the status-pill class.
+function statusSlug(status) {
+  return status?.toLowerCase().replace(/\s+/g, '-') ?? '';
+}
+
+// Policies due for renewal — renewable, status 'Active' or 'Not Renewed'
+// (being marked lost must NOT make a policy disappear from here — the
+// business still wants to see and possibly re-chase it), due within the
+// chosen window (including overdue ones), and not already renewed.
+// Renewing one takes you to a pre-filled "Add policy" form (customer,
+// insurer, coverage, and commission carried over) rather than a separate
+// flow. The only thing that removes a due policy from this list is
+// actually renewing it (which flips it to 'Renewed').
 export default function Renewals() {
   const navigate = useNavigate();
   const [days, setDays] = useState(30);
@@ -47,6 +57,17 @@ export default function Renewals() {
   useEffect(() => {
     load(days);
   }, [days, load]);
+
+  async function handleMarkLost(p) {
+    if (!window.confirm(`Mark ${p.policy_number} as not renewed? It'll stay on this list, marked "Not Renewed".`)) return;
+    setError('');
+    try {
+      await api.patch(`/policies/${p.id}/lost`);
+      load(days);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not mark this policy lost.');
+    }
+  }
 
   return (
     <Layout>
@@ -97,11 +118,15 @@ export default function Renewals() {
                     {formatDate(p.policy_end_date)} {d <= 0 ? `(overdue ${Math.abs(d)}d)` : `(${d}d)`}
                   </td>
                   <td>
-                    <span className={`status-pill status-${p.status?.toLowerCase()}`}>{p.status}</span>
+                    <span className={`status-pill status-${statusSlug(p.status)}`}>{p.status}</span>
                   </td>
                   <td>
                     <button className="btn-link" onClick={() => navigate(`/policies/new?renew_from=${p.id}`)}>
                       Renew
+                    </button>
+                    {' · '}
+                    <button className="btn-link" onClick={() => handleMarkLost(p)}>
+                      Not renewed
                     </button>
                   </td>
                 </tr>

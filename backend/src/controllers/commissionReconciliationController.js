@@ -30,9 +30,11 @@ function friendlyCheckError(err) {
 // tp_brok_percent on the TP-flagged premium (falling back to brok_percent
 // when tp_brok_percent isn't set — e.g. a single lump "total premium" row
 // with nothing flagged TP just runs entirely through brok_percent), plus
-// GST on that brokerage. Computed here in JS rather than SQL to reuse the
-// same rounding as the rest of the app's money math. Shared by the
-// per-policy list/export and the statement-matching flow below.
+// reward_percent on the whole premium (non-TP + TP combined — unlike
+// tp_brok_percent it isn't vertical/TP-split, see migration 027), plus GST
+// on that combined brokerage+reward. Computed here in JS rather than SQL
+// to reuse the same rounding as the rest of the app's money math. Shared
+// by the per-policy list/export and the statement-matching flow below.
 function computeExpectedCommission(r) {
   const nonTp = Number(r.non_tp_premium) || 0;
   const tp = Number(r.tp_premium) || 0;
@@ -40,11 +42,14 @@ function computeExpectedCommission(r) {
   const tpBrokPercent = r.tp_brok_percent !== null && r.tp_brok_percent !== undefined
     ? Number(r.tp_brok_percent)
     : brokPercent;
+  const rewardPercent = Number(r.reward_percent) || 0;
   const gstPercent = r.commission_gst_percent !== null && r.commission_gst_percent !== undefined
     ? Number(r.commission_gst_percent)
     : 18;
 
-  const pretax = round2(nonTp * (brokPercent / 100) + tp * (tpBrokPercent / 100));
+  const brokerage = round2(nonTp * (brokPercent / 100) + tp * (tpBrokPercent / 100));
+  const reward = round2((nonTp + tp) * (rewardPercent / 100));
+  const pretax = round2(brokerage + reward);
   const gstAmount = round2(pretax * (gstPercent / 100));
   return { pretax, gstAmount, total: round2(pretax + gstAmount), gstPercent };
 }
@@ -55,7 +60,7 @@ function computeExpectedCommission(r) {
 async function getExpectedByPolicyNumber(policyNumber) {
   const result = await db.query(
     `SELECT p.id AS policy_id, p.policy_number, p.insurer_id,
-            c.brok_percent, c.tp_brok_percent, c.gst AS commission_gst_percent, c.status AS commission_status,
+            c.brok_percent, c.tp_brok_percent, c.reward_percent, c.gst AS commission_gst_percent, c.status AS commission_status,
             COALESCE(pt.tp_premium, 0) AS tp_premium,
             COALESCE(pt.non_tp_premium, 0) AS non_tp_premium,
             cust.name AS customer_name,
@@ -137,7 +142,7 @@ async function fetchRows(req) {
 
   const result = await db.query(
     `SELECT p.id AS policy_id, p.policy_number, p.policy_start_date, p.premium_amount,
-            c.brok_percent, c.tp_brok_percent, c.gst AS commission_gst_percent, c.status AS commission_status,
+            c.brok_percent, c.tp_brok_percent, c.reward_percent, c.gst AS commission_gst_percent, c.status AS commission_status,
             COALESCE(pt.tp_premium, 0) AS tp_premium,
             COALESCE(pt.non_tp_premium, 0) AS non_tp_premium,
             cust.name AS customer_name,
@@ -188,6 +193,7 @@ async function fetchRows(req) {
       premium_amount: r.premium_amount,
       brok_percent: r.brok_percent,
       tp_brok_percent: r.tp_brok_percent,
+      reward_percent: r.reward_percent,
       commission_gst_percent: gstPercent,
       commission_status: r.commission_status,
       expected_pretax: pretax,
@@ -226,7 +232,7 @@ async function exportCsv(req, res, next) {
     const rows = await fetchRows(req);
     const header = [
       'Insurer', 'Insurer branch', 'Broker branch', 'Policy #', 'Customer', 'Policy start',
-      'Premium', 'Brok %', 'TP brok %', 'Expected commission', 'Received amount',
+      'Premium', 'Brok %', 'TP brok %', 'Reward %', 'Expected commission', 'Received amount',
       'Received date', 'Variance',
     ];
     const lines = [header.join(',')];
@@ -241,6 +247,7 @@ async function exportCsv(req, res, next) {
         r.premium_amount,
         r.brok_percent ?? '',
         r.tp_brok_percent ?? '',
+        r.reward_percent ?? '',
         r.expected_total,
         r.received_amount ?? '',
         r.received_date ? new Date(r.received_date).toISOString().slice(0, 10) : '',
