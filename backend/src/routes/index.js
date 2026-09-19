@@ -1,0 +1,35 @@
+const express = require('express');
+const router = express.Router();
+
+router.use('/auth', require('./authRoutes'));
+router.use('/customers', require('./customerRoutes'));
+router.use('/policies', require('./policyRoutes'));
+router.use('/premiums', require('./premiumRoutes'));
+router.use('/commission', require('./commissionRoutes'));
+router.use('/insurers', require('./insurerRoutes'));
+router.use('/insurer-branches', require('./insurerBranchRoutes'));
+router.use('/departments', require('./departmentRoutes'));
+router.use('/designations', require('./designationRoutes'));
+router.use('/employees', require('./employeeRoutes'));
+router.use('/branches', require('./branchRoutes'));
+router.use('/verticals', require('./verticalRoutes'));
+router.use('/sub-verticals', require('./subVerticalRoutes'));
+router.use('/bank-accounts', require('./bankAccountRoutes'));
+router.use('/heads', require('./headRoutes'));
+router.use('/expenses', require('./expenseRoutes'));
+router.use('/transactions', require('./transactionRoutes'));
+router.use('/customer-payments', require('./customerPaymentRoutes'));
+router.use('/insurer-payments', require('./insurerPaymentRoutes'));
+router.use('/policy-adjustments', require('./policyAdjustmentRoutes'));
+router.use('/customer-balances', require('./customerBalanceRoutes'));
+router.use('/commission-reconciliation', require('./commissionReconciliationRoutes'));
+router.use('/audit-log', require('./auditLogRoutes'));
+router.use('/attendance', require('./attendanceRoutes'));
+router.use('/alerts', require('./alertsRoutes'));
+router.use('/customer-notes', require('./customerNoteRoutes'));
+router.use('/documents', require('./documentRoutes'));
+router.use('/tasks', require('./taskRoutes'));
+router.use('/role-permissions', require('./rolePermissionRoutes'));
+router.use('/lookups', require('./lookupRoutes'));
+
+module.exports = router;
