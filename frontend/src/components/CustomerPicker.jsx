@@ -6,12 +6,26 @@ const PAGE_SIZE = 10;
 const EMPTY_NEW_CUSTOMER = {
   title: '',
   name: '',
+  gender: '',
   email: '',
   phone: '',
   address: '',
   state_id: '',
   city_id: '',
   dob: '',
+  customer_type_id: '',
+  priority_level: '',
+  branch_id: '',
+  source_id: '',
+};
+
+const REQUIRED_NEW_CUSTOMER_FIELDS = [
+  'name', 'gender', 'address', 'phone', 'state_id', 'city_id',
+  'customer_type_id', 'priority_level', 'branch_id', 'source_id',
+];
+const REQUIRED_FIELD_LABELS = {
+  name: 'Name', gender: 'Gender', address: 'Address', phone: 'Phone', state_id: 'State', city_id: 'City',
+  customer_type_id: 'Customer type', priority_level: 'Priority level', branch_id: 'Branch', source_id: 'Source',
 };
 
 // Name alone can't reliably identify a customer once there are thousands of
@@ -19,10 +33,12 @@ const EMPTY_NEW_CUSTOMER = {
 // opens a full-detail search modal (name, phone, address, city/state, DOB,
 // masked Aadhar) so the person filling out the form can actually tell two
 // "Ramesh Kumar"s apart before picking one. It also lets them add a brand
-// new customer on the spot (only name is required) without leaving whatever
-// they were filling out — with a check for existing customers sharing that
-// name or phone number first, so it's harder to create an accidental
-// duplicate.
+// new customer on the spot — name, gender, phone, address, state, city,
+// customer type, priority level, branch, and source are all required, same
+// as the main Add Customer form (see REQUIRED_NEW_CUSTOMER_FIELDS) —
+// without leaving whatever they were filling out — with a check for
+// existing customers sharing that name or phone number first, so it's
+// harder to create an accidental duplicate.
 export default function CustomerPicker({ customerId, customerLabel, onSelect }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -36,6 +52,9 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
   const [newCustomer, setNewCustomer] = useState(EMPTY_NEW_CUSTOMER);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [customerSources, setCustomerSources] = useState([]);
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState('');
   const [duplicates, setDuplicates] = useState([]);
@@ -90,6 +109,9 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
   useEffect(() => {
     if (!addMode) return;
     api.get('/lookups/states').then((res) => setStates(res.data));
+    api.get('/lookups/customer-types').then((res) => setCustomerTypes(res.data));
+    api.get('/lookups/branches').then((res) => setBranches(res.data));
+    api.get('/lookups/customer-sources').then((res) => setCustomerSources(res.data));
   }, [addMode]);
 
   useEffect(() => {
@@ -161,8 +183,9 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
 
   async function handleCreateCustomer() {
     setAddError('');
-    if (!newCustomer.name) {
-      setAddError('Name is required.');
+    const missing = REQUIRED_NEW_CUSTOMER_FIELDS.filter((f) => !newCustomer[f]);
+    if (missing.length > 0) {
+      setAddError(`Missing required fields: ${missing.map((f) => REQUIRED_FIELD_LABELS[f]).join(', ')}.`);
       return;
     }
 
@@ -275,11 +298,20 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
                       <input name="name" value={newCustomer.name} onChange={handleNewCustomerChange} />
                     </div>
                     <div className="field">
+                      <label>Gender *</label>
+                      <select name="gender" value={newCustomer.gender} onChange={handleNewCustomerChange}>
+                        <option value="">—</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Company">Company</option>
+                      </select>
+                    </div>
+                    <div className="field">
                       <label>Email</label>
                       <input type="email" name="email" value={newCustomer.email} onChange={handleNewCustomerChange} />
                     </div>
                     <div className="field">
-                      <label>Phone</label>
+                      <label>Phone *</label>
                       <input
                         name="phone"
                         value={newCustomer.phone}
@@ -293,11 +325,11 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
                       <input type="date" name="dob" value={newCustomer.dob} onChange={handleNewCustomerChange} />
                     </div>
                     <div className="field field-wide">
-                      <label>Address</label>
+                      <label>Address *</label>
                       <input name="address" value={newCustomer.address} onChange={handleNewCustomerChange} />
                     </div>
                     <div className="field">
-                      <label>State</label>
+                      <label>State *</label>
                       <select name="state_id" value={newCustomer.state_id} onChange={handleNewCustomerChange}>
                         <option value="">—</option>
                         {states.map((s) => (
@@ -306,7 +338,7 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
                       </select>
                     </div>
                     <div className="field">
-                      <label>City</label>
+                      <label>City *</label>
                       <select
                         name="city_id" value={newCustomer.city_id} onChange={handleNewCustomerChange}
                         disabled={!newCustomer.state_id}
@@ -314,6 +346,42 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
                         <option value="">—</option>
                         {cities.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Customer type *</label>
+                      <select name="customer_type_id" value={newCustomer.customer_type_id} onChange={handleNewCustomerChange}>
+                        <option value="">—</option>
+                        {customerTypes.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Priority level *</label>
+                      <select name="priority_level" value={newCustomer.priority_level} onChange={handleNewCustomerChange}>
+                        <option value="">—</option>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Branch *</label>
+                      <select name="branch_id" value={newCustomer.branch_id} onChange={handleNewCustomerChange}>
+                        <option value="">—</option>
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Source *</label>
+                      <select name="source_id" value={newCustomer.source_id} onChange={handleNewCustomerChange}>
+                        <option value="">—</option>
+                        {customerSources.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
                       </select>
                     </div>

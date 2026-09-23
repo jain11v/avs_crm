@@ -94,7 +94,7 @@ const EDITABLE_FIELDS = [
   'remarks', 'website',
 ];
 
-const REQUIRED_FIELDS = ['name', 'insurer_id'];
+const REQUIRED_FIELDS = ['name', 'insurer_id', 'address', 'city_id', 'state_id', 'pan', 'gst'];
 
 function pickFields(body) {
   const out = {};

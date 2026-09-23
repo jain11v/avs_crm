@@ -183,13 +183,13 @@ export default function InsurerBranchForm() {
           </div>
 
           <div className="field field-wide">
-            <label>Address</label>
-            <input name="address" value={form.address} onChange={handleChange} />
+            <label>Address *</label>
+            <input name="address" value={form.address} onChange={handleChange} required />
           </div>
 
           <div className="field">
-            <label>State</label>
-            <select name="state_id" value={form.state_id} onChange={handleChange}>
+            <label>State *</label>
+            <select name="state_id" value={form.state_id} onChange={handleChange} required>
               <option value="">—</option>
               {states.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -198,8 +198,8 @@ export default function InsurerBranchForm() {
           </div>
 
           <div className="field">
-            <label>City</label>
-            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id}>
+            <label>City *</label>
+            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id} required>
               <option value="">—</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -208,7 +208,7 @@ export default function InsurerBranchForm() {
           </div>
 
           <div className="field">
-            <label>PAN</label>
+            <label>PAN *</label>
             <input
               name="pan"
               value={form.pan}
@@ -217,11 +217,12 @@ export default function InsurerBranchForm() {
               maxLength={10}
               pattern="[A-Z]{5}[0-9]{4}[A-Z]"
               title="Format: AAAAA9999A"
+              required
             />
           </div>
 
           <div className="field">
-            <label>GST</label>
+            <label>GST *</label>
             <input
               name="gst"
               value={form.gst}
@@ -230,6 +231,7 @@ export default function InsurerBranchForm() {
               maxLength={15}
               pattern="[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]"
               title="15-character GSTIN"
+              required
             />
           </div>
 

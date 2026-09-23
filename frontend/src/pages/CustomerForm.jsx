@@ -223,8 +223,8 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>Gender</label>
-            <select name="gender" value={form.gender} onChange={handleChange}>
+            <label>Gender{!isEdit && ' *'}</label>
+            <select name="gender" value={form.gender} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
@@ -238,7 +238,7 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>Phone</label>
+            <label>Phone{!isEdit && ' *'}</label>
             <input
               name="phone"
               value={form.phone}
@@ -247,6 +247,7 @@ export default function CustomerForm() {
               maxLength={10}
               pattern="[6-9][0-9]{9}"
               title="10 digits, starting with 6-9"
+              required={!isEdit}
             />
           </div>
 
@@ -256,13 +257,13 @@ export default function CustomerForm() {
           </div>
 
           <div className="field field-wide">
-            <label>Address</label>
-            <input name="address" value={form.address} onChange={handleChange} />
+            <label>Address{!isEdit && ' *'}</label>
+            <input name="address" value={form.address} onChange={handleChange} required={!isEdit} />
           </div>
 
           <div className="field">
-            <label>State</label>
-            <select name="state_id" value={form.state_id} onChange={handleChange}>
+            <label>State{!isEdit && ' *'}</label>
+            <select name="state_id" value={form.state_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {states.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -271,8 +272,8 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>City</label>
-            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id}>
+            <label>City{!isEdit && ' *'}</label>
+            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id} required={!isEdit}>
               <option value="">—</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -320,8 +321,8 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>Customer type</label>
-            <select name="customer_type_id" value={form.customer_type_id} onChange={handleChange}>
+            <label>Customer type{!isEdit && ' *'}</label>
+            <select name="customer_type_id" value={form.customer_type_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {customerTypes.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
@@ -330,8 +331,8 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>Priority level</label>
-            <select name="priority_level" value={form.priority_level} onChange={handleChange}>
+            <label>Priority level{!isEdit && ' *'}</label>
+            <select name="priority_level" value={form.priority_level} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>{n}</option>
@@ -339,19 +340,21 @@ export default function CustomerForm() {
             </select>
           </div>
 
-          <div className="field">
-            <label>Assigned employee</label>
-            <select name="employee_id" value={form.employee_id} onChange={handleChange}>
-              <option value="">—</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
-          </div>
+          {isEdit && (
+            <div className="field">
+              <label>Assigned employee</label>
+              <select name="employee_id" value={form.employee_id} onChange={handleChange}>
+                <option value="">—</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="field">
-            <label>Branch</label>
-            <select name="branch_id" value={form.branch_id} onChange={handleChange}>
+            <label>Branch{!isEdit && ' *'}</label>
+            <select name="branch_id" value={form.branch_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -360,8 +363,8 @@ export default function CustomerForm() {
           </div>
 
           <div className="field">
-            <label>Source</label>
-            <select name="source_id" value={form.source_id} onChange={handleChange}>
+            <label>Source{!isEdit && ' *'}</label>
+            <select name="source_id" value={form.source_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {customerSources.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>

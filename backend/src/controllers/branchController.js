@@ -74,7 +74,7 @@ async function getById(req, res, next) {
 }
 
 const EDITABLE_FIELDS = ['name', 'address', 'city_id', 'state_id', 'branch_code', 'email', 'phone', 'gst'];
-const REQUIRED_FIELDS = ['name', 'email'];
+const REQUIRED_FIELDS = ['name', 'email', 'address', 'city_id', 'state_id', 'gst'];
 
 function pickFields(body) {
   const out = {};

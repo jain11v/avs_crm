@@ -113,13 +113,22 @@ function pickFields(body) {
   return out;
 }
 
+const REQUIRED_ON_CREATE = [
+  'name', 'gender', 'address', 'phone', 'state_id', 'city_id',
+  'customer_type_id', 'priority_level', 'branch_id', 'source_id',
+];
+
 // POST /api/customers
+// employee_id is never taken from the client here — it's always whoever is
+// creating the record, not a pickable "assigned employee" field.
 async function create(req, res, next) {
   try {
     const fields = pickFields(normalizeFormats(req.body));
+    fields.employee_id = req.employee.id;
 
-    if (!fields.name) {
-      return res.status(400).json({ error: 'Name is required.' });
+    const missing = REQUIRED_ON_CREATE.filter((f) => !fields[f]);
+    if (missing.length > 0) {
+      return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}.` });
     }
 
     const formatErrors = validateFormats(fields);
