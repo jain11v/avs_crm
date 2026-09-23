@@ -1,65 +1,71 @@
-# Insurance CRM — Phases 1–3: Auth, Customers, Policies
+# Insurance CRM
 
-This covers the project skeleton, database migrations, employee login,
-full customer management, and full policy management. Transactions/balances
-and employee/department admin screens are next.
+An internal CRM for an insurance brokerage: customers, policies, premiums
+and commission, employee/HR (attendance, leave, payroll), the money
+ledger (expenses, transactions, commission reconciliation), and admin
+(roles, org structure, documents, tasks).
 
-## What's included
+For what's actually built and how each part works, see
+**[IMPLEMENTATION.md](./IMPLEMENTATION.md)** — this file only covers
+getting it running.
 
-- **backend/** — Node.js + Express API, connects to your existing PostgreSQL
-  database, handles login/logout via JWT stored in an httpOnly cookie.
-- **frontend/** — React (Vite) app with a login page and a protected
-  dashboard shell.
+## Stack
 
-## 1. Run the database migrations
+- **backend/** — Node.js + Express, PostgreSQL via raw SQL (`pg`, no
+  ORM), JWT auth in an httpOnly cookie.
+- **frontend/** — React + Vite, no state library, plain `axios`.
 
-Run all three, in order:
+## 1. Set up the database(s)
 
-```bash
-psql -h <host> -U <user> -d <database> -f backend/src/migrations/001_add_auth_to_employees.sql
-psql -h <host> -U <user> -d <database> -f backend/src/migrations/002_add_format_checks.sql
-psql -h <host> -U <user> -d <database> -f backend/src/migrations/003_add_customer_type_source_tables.sql
-```
-
-1. Adds `password_hash`, `last_login`, and `role` columns to `employees`.
-2. Adds CHECK constraints so phone/Aadhar/PAN/GST can never be saved in the
-   wrong format — enforced at the database level, not just in the form.
-   **If you already have rows with values that don't match these formats,
-   this migration will fail** — it has commented-out `SELECT` queries near
-   the bottom to help you find and fix those rows first.
-3. Creates `customer_types` and `customer_sources` reference tables (seeded
-   with sensible defaults), adds `customer_type_id`/`source_id` to
-   `customers`, and best-effort migrates any existing free-text values into
-   them by matching names. The old `type_of_customer`/`source` text columns
-   are left in place (not dropped) so you can verify the migration before
-   removing them — see the commented-out queries at the bottom of the file.
-
-## 2. Set up the backend
+This app runs against three separate local PostgreSQL databases — dev,
+test, and prod — selected by an `APP_ENV` variable rather than a single
+`.env`. See [Environments](#environments) below for why and how; the
+short version:
 
 ```bash
 cd backend
-cp .env.example .env
-# edit .env with your real DB credentials and a random JWT_SECRET
 npm install
+
+# create the databases (skip any that already exist)
+psql -h <host> -p <port> -U <user> -c "CREATE DATABASE insurance_crm_dev;"
+psql -h <host> -p <port> -U <user> -c "CREATE DATABASE insurance_crm_test;"
+psql -h <host> -p <port> -U <user> -c "CREATE DATABASE insurance_crm_prod;"   # or point .env.production at an existing database
+
+# copy and fill in real values for each
+cp .env.example .env.development   # DB_NAME=insurance_crm_dev
+cp .env.example .env.test          # DB_NAME=insurance_crm_test
+cp .env.example .env.production    # DB_NAME=insurance_crm_prod (or your real database)
+
+# apply every migration to each
+npm run migrate         # dev
+npm run migrate:test    # test
+npm run migrate:prod    # prod
 ```
 
-Create your first login (the employee row must already exist in the
-`employees` table — this just sets their password and makes them an admin):
+`npm run migrate*` is a small runner (`backend/src/scripts/migrate.js`)
+that tracks what's already applied in a `schema_migrations` table and
+only runs what's new — safe to re-run any time, including after adding a
+new migration file. If you're pointing `.env.production` at a database
+that already has the schema applied some other way, baseline it instead
+of running it for real: `node src/scripts/migrate.js --baseline` (with
+`APP_ENV=production` set) records every existing migration file as
+applied without executing its SQL.
+
+## 2. Run the backend
 
 ```bash
-npm run create-admin your.email@example.com "YourPassword123"
+cd backend
+npm run create-admin   # sets a password + admin role on an existing employee row
+                        # (insert the employee row first if the database is empty —
+                        # see IMPLEMENTATION.md §3)
+npm run dev             # dev database, http://localhost:5000
+npm run dev:test        # test database
+npm run dev:prod        # prod database — your real data
 ```
 
-Start the API:
+Check `http://localhost:5000/api/health` — you should see `{"status":"ok"}`.
 
-```bash
-npm run dev
-```
-
-It runs on `http://localhost:5000` by default. Check `http://localhost:5000/api/health`
-in your browser — you should see `{"status":"ok"}`.
-
-## 3. Set up the frontend
+## 3. Run the frontend
 
 In a separate terminal:
 
@@ -69,66 +75,82 @@ npm install
 npm run dev
 ```
 
-It runs on `http://localhost:5173`. Open that in your browser — you should
-land on the login page. Log in with the email/password you set in step 2.
+Runs on `http://localhost:5173` and always talks to whichever backend is
+currently running on port 5000 — the three environments aren't meant to
+run concurrently on one machine, you pick one at a time via which
+backend script you launched.
+
+## 4. Run the tests
+
+```bash
+cd backend
+npm test
+```
+
+Jest, unit tests only (pure functions — premium/commission math, audit-log
+diffing) — no database involved yet, even though a `test` database now
+exists for when that changes.
+
+## Environments
+
+Three real, separately-migrated databases instead of one shared `.env`:
+
+| | Database | When to use |
+|---|---|---|
+| **dev** | `insurance_crm_dev` | Day-to-day local development. Starts empty. |
+| **test** | `insurance_crm_test` | A disposable database to experiment or run integration tests against later, without touching dev or prod. Starts empty. |
+| **prod** | your real database | The real business data. Treat it as non-disposable. |
+
+Selection is via `APP_ENV` (`development` / `test` / `production`), read
+by `backend/src/config/loadEnv.js`, which loads `.env.${APP_ENV}` (falling
+back to a plain `.env` if that file doesn't exist — so a single-`.env`
+setup still works if you don't need three). This is deliberately a
+*different* variable from `NODE_ENV`, which keeps its own narrower job of
+switching the auth cookie to HTTPS-only in a real deployment — selecting
+"prod" locally shouldn't also demand HTTPS on `localhost`.
+
+All `npm run <script>:test` / `:prod` variants (`dev`, `migrate`,
+`create-admin`) exist for exactly this reason — see `backend/package.json`.
 
 ## How auth works
 
-- Password is checked with bcrypt against `employees.password_hash`.
-- On success, the API signs a JWT and sets it as an **httpOnly cookie** (not
-  readable by JavaScript — protects against XSS token theft).
-- The React app calls `GET /api/auth/me` on load to check if there's already
-  a valid session, so refreshing the page keeps you logged in.
-- Sessions last 8 hours (`JWT_EXPIRES_IN` in `.env`), then you'll need to log
-  in again.
+- Password checked with bcrypt against `employees.password_hash`.
+- On success, the API signs a JWT and sets it as an **httpOnly cookie**
+  (not readable by JavaScript).
+- The React app calls `GET /api/auth/me` on load to restore an existing
+  session, so a page refresh doesn't log you out.
+- Sessions last 8 hours (`JWT_EXPIRES_IN`).
 
 ## Project structure
 
 ```
 backend/
   src/
-    config/db.js          — PostgreSQL connection pool
-    middleware/            — auth check, error handler
-    controllers/            — request handlers (business logic)
-    routes/                 — URL → controller mapping
-    migrations/              — SQL files to run against the DB
-    scripts/createAdmin.js    — CLI to set a password on an employee
-    app.js / server.js         — Express app setup / entry point
+    config/         — db pool, env-file loading, page-permission list
+    middleware/      — auth check, error handler, file uploads
+    controllers/       — request handlers (business logic), one per resource
+    routes/              — URL → controller mapping
+    utils/                 — shared math/validation/audit-log helpers
+    jobs/                    — background jobs (e.g. auto-marking absent)
+    migrations/                — numbered .sql files, tracked in schema_migrations
+    scripts/                     — migrate.js, createAdmin.js
+    app.js / server.js             — Express app setup / entry point
 
 frontend/
   src/
-    api/axios.js           — configured HTTP client (sends cookies)
+    api/axios.js            — configured HTTP client (sends cookies)
     context/AuthContext.jsx — global "who's logged in" state
-    components/ProtectedRoute.jsx — redirects to /login if not authed
-    pages/Login.jsx / Dashboard.jsx
-    App.jsx                — routes
+    components/               — shared UI (modals, pickers, panels)
+    pages/                       — one per screen
+    App.jsx                        — routes
 ```
 
-## What's next
+## Tooling
 
-Customers and Policies are both fully wired up now (list, search, create,
-edit, cascading dropdowns, validation). Next modules, in suggested order:
+`tools/dependency-graph/` has a self-contained module-dependency viewer
+(`module-map.html` — open directly in a browser). Regenerate it after
+changing which files import which with:
 
-1. **Transactions & balances** — payments against policies, outstanding
-   balance view, multiple partial payments per policy
-2. **Insurers, branches, verticals admin** — screens to manage the
-   reference data itself (right now it's SQL-only)
-3. **Employees/departments/designations** — admin-only management screens
-
-Each will add a `routes/*Routes.js` + `controllers/*Controller.js` on the
-backend, and a page + API calls on the frontend, following the same pattern
-as customers and policies.
-
-## Project structure — what's implemented so far
-
-- **Customers** (`/customers`): search, paginate, create, edit, deactivate.
-  Cascading state → city dropdown. Customer type and source are dropdowns
-  backed by their own reference tables (`customer_types`,
-  `customer_sources`), editable later without touching code.
-- **Policies** (`/policies`): search by policy number or customer name,
-  filter by status, create, edit. Customer is picked via type-to-search
-  autocomplete (not a giant dropdown). Insurer → insurer branch and
-  Vertical → sub-vertical are cascading dropdowns. Server-side validation
-  covers required fields, date ordering (end after start), and every
-  foreign key — invalid selections return a specific, human-readable error
-  rather than a generic failure.
+```bash
+node tools/dependency-graph/generate.js
+```

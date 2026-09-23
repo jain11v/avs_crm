@@ -2,11 +2,15 @@
 
 Audit date: 2026-09-19. Scope: full backend (`backend/src`, Node/Express + raw `pg` SQL) and frontend (`frontend/src`, React+Vite). Method: manual read-through of every controller, route, and migration; targeted greps for known risk patterns (SQL injection, timezone-unsafe date handling, duplicated money math); `npm test` run from `backend/`. Every finding below was confirmed by reading the actual code — nothing here is speculative.
 
+**Status as of 2026-09-23** (after a second, broader audit and fix pass — see [IMPLEMENTATION.md](./IMPLEMENTATION.md) for everything else that pass covered): Finding #2 (the critical one) is **fixed**. Findings #1 and #5 turned out to describe a **deliberate design decision**, not a bug — confirmed directly with the person building this: customers/policies and their sub-resources are intentionally left ungated at the API level because those endpoints are shared across many pages (e.g. the customer picker used inside the policy form), so a page-level gate there would risk breaking legitimate cross-page workflows. Findings #3 and #4 are still open, unchanged, still low priority. Per-finding status notes are inline below.
+
 ---
 
 ## Critical
 
 ### 1. `customers` and `policies` (and their sub-resources) have no server-side page-permission check
+
+> **Status: not a bug — deliberate, confirmed 2026-09-23.** See the status note at the top of this file. Left exactly as originally described below for the record; no fix planned.
 **Files:** `backend/src/routes/customerRoutes.js`, `backend/src/routes/policyRoutes.js`, `backend/src/routes/premiumRoutes.js`, `backend/src/routes/customerPaymentRoutes.js`, `backend/src/routes/insurerPaymentRoutes.js`, `backend/src/routes/policyAdjustmentRoutes.js`
 
 **Description:** The app's access-control model is `requireAuth` (must be logged in) + `requirePage(key)` (must have that page enabled in `role_permissions` for their role — admin always passes). This is applied consistently to every other entity: departments, designations, branches, insurers, insurer branches, bank accounts, heads, expenses, transactions, customer balances, commission reconciliation, audit log, attendance, sub-verticals, verticals, employees.
@@ -20,6 +24,8 @@ Audit date: 2026-09-19. Scope: full backend (`backend/src`, Node/Express + raw `
 ---
 
 ### 2. Privilege escalation via `PUT /api/employees/:id` — any role with the "Employees" page can promote themselves (or anyone) to admin
+
+> **Status: fixed 2026-09-22.** `role` removed from `update()`'s `EDITABLE_FIELDS`; it can now only change via the already admin-gated `/credentials` endpoint. Also added: deactivating/deleting an employee whose *own* role is admin now requires the requester to also be admin, closing the escalate-then-lock-out follow-on this bug would otherwise have enabled. See IMPLEMENTATION.md §3.
 **File:** `backend/src/controllers/employeeController.js:111-116` (`EDITABLE_FIELDS`), `:176-220` (`update`); route: `backend/src/routes/employeeRoutes.js:8-15`
 
 **Description:** `employeeRoutes.js` deliberately restricts `PATCH /api/employees/:id/credentials` (which sets `role` and/or `password`) to `requireRole('admin')`, with a comment explaining this is intentional: *"Admin-only regardless of page permission — this is what turns an employee record into a login ('create user') or changes their role."*
@@ -57,6 +63,8 @@ However, the general-purpose `PUT /api/employees/:id` (the `update` handler, gat
 ---
 
 ### 5. `premiumRoutes.js`, `customerPaymentRoutes.js`, `insurerPaymentRoutes.js`, `policyAdjustmentRoutes.js` have no page-level gate at all
+
+> **Status: not a bug — deliberate, confirmed 2026-09-23,** same reasoning as Finding #1 above (these are exactly the kind of parent-entity sub-resources that note describes).
 **Files:** as named, all under `backend/src/routes/`
 
 **Description:** Listed separately from Finding #1 because these four don't have a dedicated key in `config/pages.js`/`pages.js` the way `customers`/`policies` do, so this may be intentional ("access follows the parent policy/customer view, not a standalone toggle"). Still worth flagging explicitly: right now *any* authenticated employee, regardless of role or `role_permissions`, can list/create customer payments, insurer payments, and policy adjustments (discount/cashback requests) for *any* customer or policy in the system via these endpoints, with only `requireAuth` — no ownership check, no page check. `policyAdjustmentRoutes.js` does correctly gate the `/decision` approval step to admin/manager via `requireRole`, but plain create/list/update are open to every logged-in account.
