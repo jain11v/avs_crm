@@ -38,6 +38,8 @@ import CommissionReconciliation from './pages/CommissionReconciliation';
 import AuditLog from './pages/AuditLog';
 import Attendance from './pages/Attendance';
 import Performance from './pages/Performance';
+import Leave from './pages/Leave';
+import Payroll from './pages/Payroll';
 import Chat from './pages/Chat';
 import Admin from './pages/Admin';
 
@@ -436,6 +438,22 @@ export default function App() {
             element={
               <ProtectedRoute pageKey="performance">
                 <Performance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leave"
+            element={
+              <ProtectedRoute pageKey="leave">
+                <Leave />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payroll"
+            element={
+              <ProtectedRoute pageKey="payroll">
+                <Payroll />
               </ProtectedRoute>
             }
           />

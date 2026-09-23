@@ -22,6 +22,8 @@ export const PAGES = [
   { key: 'audit_log', label: 'Activity log', path: '/activity-log' },
   { key: 'attendance', label: 'Attendance', path: '/attendance' },
   { key: 'performance', label: 'Performance', path: '/performance' },
+  { key: 'leave', label: 'Leave', path: '/leave' },
+  { key: 'payroll', label: 'Payroll', path: '/payroll' },
 ];
 
 export const ROLES = ['employee', 'manager'];

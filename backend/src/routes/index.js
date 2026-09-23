@@ -26,6 +26,9 @@ router.use('/commission-reconciliation', require('./commissionReconciliationRout
 router.use('/audit-log', require('./auditLogRoutes'));
 router.use('/attendance', require('./attendanceRoutes'));
 router.use('/performance', require('./performanceRoutes'));
+router.use('/financial-reports', require('./financialReportsRoutes'));
+router.use('/leave', require('./leaveRoutes'));
+router.use('/payroll', require('./payrollRoutes'));
 router.use('/alerts', require('./alertsRoutes'));
 router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/customer-notes', require('./customerNoteRoutes'));

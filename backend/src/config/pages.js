@@ -1,7 +1,11 @@
 // Canonical list of app "pages" for role-based access control. Keys are
 // stable identifiers referenced by role_permissions rows and mirrored on
 // the frontend (frontend/src/pages.js) — changing a key here means
-// changing it there too, and migrating any stored rows.
+// changing it there too, and migrating any stored rows. Exception:
+// 'financial_reports' is a Dashboard section, not a standalone route, so
+// it's deliberately NOT in the frontend list (that one also drives the top
+// nav) — it's gated purely via requirePage() here and hasPermission() on
+// the frontend.
 const PAGES = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'customers', label: 'Customers' },
@@ -24,6 +28,9 @@ const PAGES = [
   { key: 'audit_log', label: 'Activity log' },
   { key: 'attendance', label: 'Attendance' },
   { key: 'performance', label: 'Performance' },
+  { key: 'financial_reports', label: 'Financial reports' },
+  { key: 'leave', label: 'Leave' },
+  { key: 'payroll', label: 'Payroll' },
 ];
 
 const PAGE_KEYS = PAGES.map((p) => p.key);
