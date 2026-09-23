@@ -34,6 +34,8 @@ import Heads from './pages/Heads';
 import HeadForm from './pages/HeadForm';
 import Transactions from './pages/Transactions';
 import CustomerBalances from './pages/CustomerBalances';
+import EmployeeBalances from './pages/EmployeeBalances';
+import BankEntries from './pages/BankEntries';
 import CommissionReconciliation from './pages/CommissionReconciliation';
 import AuditLog from './pages/AuditLog';
 import Attendance from './pages/Attendance';
@@ -407,6 +409,22 @@ export default function App() {
             element={
               <ProtectedRoute pageKey="customer_balances">
                 <CustomerBalances />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee-balances"
+            element={
+              <ProtectedRoute pageKey="employee_balances">
+                <EmployeeBalances />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/bank-entries"
+            element={
+              <ProtectedRoute pageKey="bank_entries">
+                <BankEntries />
               </ProtectedRoute>
             }
           />

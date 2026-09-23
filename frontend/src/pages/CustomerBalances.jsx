@@ -146,6 +146,7 @@ export default function CustomerBalances() {
                 <th>Paid</th>
                 <th>Discounts</th>
                 <th>Balance</th>
+                <th>Bank entry balance</th>
                 <th></th>
               </tr>
             </thead>
@@ -167,6 +168,9 @@ export default function CustomerBalances() {
                     <td style={{ fontWeight: 600, color: Number(r.balance) > 0 ? '#b45309' : '#15803d' }}>
                       {formatMoney(r.balance)}
                     </td>
+                    <td style={{ fontWeight: 600, color: Number(r.bank_entry_balance) > 0 ? '#15803d' : Number(r.bank_entry_balance) < 0 ? '#b45309' : undefined }}>
+                      {Number(r.bank_entry_balance) === 0 ? '—' : formatMoney(r.bank_entry_balance)}
+                    </td>
                     <td>
                       <button className="btn-link" onClick={() => toggleExpand(r.customer_id)}>
                         {expandedId === r.customer_id ? 'Hide' : 'Details'}
@@ -175,7 +179,7 @@ export default function CustomerBalances() {
                   </tr>
                   {expandedId === r.customer_id && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         {detailLoading ? (
                           <p className="subtitle">Loading details…</p>
                         ) : detail ? (
@@ -262,6 +266,36 @@ export default function CustomerBalances() {
                                       <td style={{ textTransform: 'capitalize' }}>{a.type}</td>
                                       <td>{formatMoney(a.amount)}</td>
                                       <td><span className={`status-pill status-${a.status}`}>{a.status}</span></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+
+                            <h4 style={{ marginTop: '1rem' }}>
+                              Bank entries {detail.bank_entry_balance !== undefined && `(net ${formatMoney(detail.bank_entry_balance)})`}
+                            </h4>
+                            {!detail.bank_entries || detail.bank_entries.length === 0 ? (
+                              <p className="subtitle">None recorded.</p>
+                            ) : (
+                              <table className="data-table">
+                                <thead>
+                                  <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Head</th>
+                                    <th>Remarks</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {detail.bank_entries.map((be) => (
+                                    <tr key={be.id}>
+                                      <td>{formatDate(be.entry_date)}</td>
+                                      <td>{be.type_of_transaction}</td>
+                                      <td>{formatMoney(be.amount)}</td>
+                                      <td>{be.head_name || '—'}</td>
+                                      <td>{be.remarks || '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>

@@ -4,6 +4,17 @@ const db = require('../config/db');
 // total premium across their policies, minus payments they've allocated
 // against those policies, minus discounts approved against those policies.
 // Cashback is a separate payout and does not affect this balance.
+//
+// bank_entry_balance is a deliberately SEPARATE running total — the net of
+// any bank_entries (see bankEntryController.js) linked to this customer.
+// It's a different concept from the premium balance above (an ad-hoc bank
+// entry isn't about a policy's premium) so it's shown as its own column
+// rather than added into `balance`, which would blend two unrelated
+// numbers into one misleading figure.
+//
+// A customer shows up here if they have policies OR linked bank entries
+// (previously just policies, via an inner join — widened so a customer
+// with only a bank entry and no policy isn't silently excluded).
 const BALANCE_CTE = `
   WITH policy_totals AS (
     SELECT p.customer_id,
@@ -26,33 +37,44 @@ const BALANCE_CTE = `
     JOIN policies p ON pa.policy_id = p.id
     WHERE pa.type = 'discount' AND pa.status = 'approved'
     GROUP BY p.customer_id
+  ),
+  bank_entry_totals AS (
+    SELECT customer_id,
+           COALESCE(SUM(CASE WHEN type_of_transaction = 'Credit' THEN amount ELSE -amount END), 0) AS bank_entry_balance
+    FROM bank_entries
+    WHERE customer_id IS NOT NULL
+    GROUP BY customer_id
   )
   SELECT c.id AS customer_id, c.name AS customer_name,
          pt.policy_ids, pt.policy_numbers,
          COALESCE(pt.total_premium, 0) AS total_premium,
          COALESCE(pay.total_paid, 0) AS total_paid,
          COALESCE(dt.total_discount, 0) AS total_discount,
-         COALESCE(pt.total_premium, 0) - COALESCE(pay.total_paid, 0) - COALESCE(dt.total_discount, 0) AS balance
+         COALESCE(pt.total_premium, 0) - COALESCE(pay.total_paid, 0) - COALESCE(dt.total_discount, 0) AS balance,
+         COALESCE(bet.bank_entry_balance, 0) AS bank_entry_balance
   FROM customers c
-  JOIN policy_totals pt ON pt.customer_id = c.id
+  LEFT JOIN policy_totals pt ON pt.customer_id = c.id
   LEFT JOIN payment_totals pay ON pay.customer_id = c.id
   LEFT JOIN discount_totals dt ON dt.customer_id = c.id
+  LEFT JOIN bank_entry_totals bet ON bet.customer_id = c.id
 `;
+
+const HAS_ANY_BALANCE = '(pt.customer_id IS NOT NULL OR bet.customer_id IS NOT NULL)';
 
 function balanceFilters(req) {
   const search = (req.query.search || '').trim();
   const onlyOutstanding = req.query.only_outstanding === 'true';
 
-  const conditions = [];
+  const conditions = [HAS_ANY_BALANCE];
   const params = [];
   if (search) {
     params.push(`%${search}%`);
     conditions.push(`c.name ILIKE $${params.length}`);
   }
   if (onlyOutstanding) {
-    conditions.push(`(COALESCE(pt.total_premium, 0) - COALESCE(pay.total_paid, 0) - COALESCE(dt.total_discount, 0)) > 0.01`);
+    conditions.push(`((COALESCE(pt.total_premium, 0) - COALESCE(pay.total_paid, 0) - COALESCE(dt.total_discount, 0)) > 0.01 OR COALESCE(bet.bank_entry_balance, 0) != 0)`);
   }
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
   return { whereClause, params };
 }
 
@@ -99,7 +121,7 @@ async function exportCsv(req, res, next) {
       params
     );
 
-    const header = ['Customer', 'Policies', 'Total Premium', 'Total Paid', 'Total Discount', 'Balance'];
+    const header = ['Customer', 'Policies', 'Total Premium', 'Total Paid', 'Total Discount', 'Balance', 'Bank Entry Balance'];
     const lines = [header.join(',')];
     for (const r of dataResult.rows) {
       lines.push([
@@ -109,6 +131,7 @@ async function exportCsv(req, res, next) {
         r.total_paid,
         r.total_discount,
         r.balance,
+        r.bank_entry_balance,
       ].join(','));
     }
 
@@ -173,6 +196,21 @@ async function getByCustomer(req, res, next) {
       [customerId]
     );
 
+    const bankEntriesResult = await db.query(
+      `SELECT be.id, be.entry_date, be.type_of_transaction, be.amount, be.remarks,
+              ba.name AS bank_account_name, h.name AS head_name
+       FROM bank_entries be
+       LEFT JOIN bank_accounts ba ON be.bank_account_id = ba.id
+       LEFT JOIN heads h ON be.head_id = h.id
+       WHERE be.customer_id = $1
+       ORDER BY be.entry_date DESC, be.id DESC`,
+      [customerId]
+    );
+    const bankEntryBalance = bankEntriesResult.rows.reduce(
+      (sum, r) => sum + (r.type_of_transaction === 'Credit' ? Number(r.amount) : -Number(r.amount)),
+      0
+    );
+
     const totals = policiesResult.rows.reduce(
       (acc, row) => ({
         total_premium: acc.total_premium + Number(row.premium_amount || 0),
@@ -190,6 +228,8 @@ async function getByCustomer(req, res, next) {
       policies: policiesResult.rows,
       payments: paymentsResult.rows,
       adjustments: adjustmentsResult.rows,
+      bank_entry_balance: bankEntryBalance,
+      bank_entries: bankEntriesResult.rows,
     });
   } catch (err) {
     next(err);

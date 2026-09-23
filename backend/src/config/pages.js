@@ -24,6 +24,8 @@ const PAGES = [
   { key: 'heads', label: 'Heads' },
   { key: 'transactions', label: 'Transactions' },
   { key: 'customer_balances', label: 'Customer balances' },
+  { key: 'employee_balances', label: 'Employee balances' },
+  { key: 'bank_entries', label: 'Bank entries' },
   { key: 'commission_reconciliation', label: 'Commission reconciliation' },
   { key: 'audit_log', label: 'Activity log' },
   { key: 'attendance', label: 'Attendance' },
