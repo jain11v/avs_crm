@@ -90,15 +90,17 @@ export default function VerticalForm() {
             <input name="name" value={form.name} onChange={handleChange} required />
           </div>
 
-          <div className="field">
-            <label>Vertical head</label>
-            <select name="vertical_head" value={form.vertical_head} onChange={handleChange}>
-              <option value="">—</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
-          </div>
+          {isEdit && (
+            <div className="field">
+              <label>Vertical head</label>
+              <select name="vertical_head" value={form.vertical_head} onChange={handleChange}>
+                <option value="">—</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="field field-wide">
             <label>Description</label>
