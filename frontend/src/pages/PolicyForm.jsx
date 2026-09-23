@@ -699,6 +699,13 @@ export default function PolicyForm() {
                 />
               </div>
               <div className="field">
+                <label>Balance</label>
+                <input
+                  type="text" readOnly
+                  value={`₹${(computeNetPremium(premiumRows) - (Number(paymentForm.customer_amount) || 0)).toLocaleString('en-IN')}`}
+                />
+              </div>
+              <div className="field">
                 <label>Received into account</label>
                 <select name="customer_bank_account_id" value={paymentForm.customer_bank_account_id} onChange={handlePaymentChange}>
                   <option value="">—</option>
