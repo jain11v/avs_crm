@@ -3,10 +3,16 @@ const STATUS_COLORS = { pending: '#b45309', in_progress: '#2563eb', done: '#1580
 const PRIORITY_LABELS = { low: 'Low', normal: 'Normal', high: 'High' };
 const OUTCOME_LABELS = { pending: 'Open lead', converted: 'Policy made', lost: 'Lost lead' };
 const OUTCOME_COLORS = { pending: '#6b7280', converted: '#15803d', lost: '#b91c1c' };
+const RECURRENCE_LABELS = { daily: '↻ Daily', weekly: '↻ Weekly', monthly: '↻ Monthly' };
 
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-IN');
+}
+
+function isOverdue(task) {
+  if (!task.due_date || task.status === 'done') return false;
+  return new Date(task.due_date) < new Date(new Date().toDateString());
 }
 
 // How long the assignee actually took, start to finish — created_at and
@@ -29,7 +35,7 @@ function formatDuration(startIso, endIso) {
 // the Employees page lets the assigner delete). Pass neither handler for
 // a read-only list. onOpenDocs, if passed, makes the document count a
 // button that opens a documents modal (caller owns that modal's state).
-export default function TaskList({ tasks, onStatusChange, onDelete, onMarkLost, onOpenDocs, showAssignedBy }) {
+export default function TaskList({ tasks, onStatusChange, onDelete, onMarkLost, onOpenDocs, showAssignedBy, showAssignedTo }) {
   if (tasks.length === 0) {
     return <p className="subtitle">No tasks.</p>;
   }
@@ -42,6 +48,7 @@ export default function TaskList({ tasks, onStatusChange, onDelete, onMarkLost, 
           <th>Due</th>
           <th>Priority</th>
           {showAssignedBy && <th>Assigned by</th>}
+          {showAssignedTo && <th>Assigned to</th>}
           <th>Docs</th>
           <th>Lead</th>
           <th>Status</th>
@@ -56,10 +63,22 @@ export default function TaskList({ tasks, onStatusChange, onDelete, onMarkLost, 
               {t.title}
               {t.description && <div className="subtitle" style={{ margin: 0 }}>{t.description}</div>}
             </td>
-            <td>{formatDate(t.due_date)}</td>
+            <td>
+              {isOverdue(t) ? (
+                <span style={{ color: '#b91c1c', fontWeight: 600 }}>{formatDate(t.due_date)} — Overdue</span>
+              ) : (
+                formatDate(t.due_date)
+              )}
+              {t.recurrence && t.recurrence !== 'none' && (
+                <div className="subtitle" style={{ margin: 0 }}>{RECURRENCE_LABELS[t.recurrence]}</div>
+              )}
+            </td>
             <td>{PRIORITY_LABELS[t.priority] || t.priority}</td>
             {showAssignedBy && (
               <td>{t.assigned_by_first_name ? `${t.assigned_by_first_name} ${t.assigned_by_last_name || ''}`.trim() : '—'}</td>
+            )}
+            {showAssignedTo && (
+              <td>{t.assigned_to_first_name ? `${t.assigned_to_first_name} ${t.assigned_to_last_name || ''}`.trim() : '—'}</td>
             )}
             <td>
               {t.document_count > 0 ? (

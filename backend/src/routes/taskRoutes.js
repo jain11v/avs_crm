@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { listMine, list, create, updateStatus, markLost, remove } = require('../controllers/taskController');
+const { listMine, listAssigned, list, create, updateStatus, markLost, remove } = require('../controllers/taskController');
 const { requireAuth } = require('../middleware/authMiddleware');
 
 // No requirePage gate — every employee needs to see their own tasks on
@@ -10,6 +10,7 @@ const { requireAuth } = require('../middleware/authMiddleware');
 router.use(requireAuth);
 
 router.get('/mine', listMine);
+router.get('/assigned', listAssigned);
 router.get('/', list);
 router.post('/', create);
 router.patch('/:id/status', updateStatus);

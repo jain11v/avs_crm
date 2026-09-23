@@ -6,6 +6,7 @@ import TaskList from '../components/TaskList';
 import DocumentsPanel from '../components/DocumentsPanel';
 import DashboardAlerts from '../components/DashboardAlerts';
 import DashboardStats from '../components/DashboardStats';
+import FinancialReports from '../components/FinancialReports';
 import AssignTaskModal from '../components/AssignTaskModal';
 import MarkLostModal from '../components/MarkLostModal';
 import TaskDocumentsModal from '../components/TaskDocumentsModal';
@@ -23,8 +24,10 @@ function greeting() {
 export default function Dashboard() {
   const { employee, hasPermission } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [assignedTasks, setAssignedTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [assignedLoading, setAssignedLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [lostTask, setLostTask] = useState(null);
@@ -36,7 +39,15 @@ export default function Dashboard() {
     }).finally(() => setLoading(false));
   }, []);
 
+  // Tasks this employee handed to someone else — otherwise there's nowhere
+  // for a manager to see what they delegated without opening each report's
+  // own Employees record individually.
+  const loadAssignedTasks = useCallback(() => {
+    api.get('/tasks/assigned').then((res) => setAssignedTasks(res.data)).catch(() => {}).finally(() => setAssignedLoading(false));
+  }, []);
+
   useEffect(() => { loadTasks(); }, [loadTasks]);
+  useEffect(() => { loadAssignedTasks(); }, [loadAssignedTasks]);
   useEffect(() => { api.get('/lookups/employees').then((res) => setEmployees(res.data)); }, []);
 
   // Non-admins may only assign down their own reporting chain, plus
@@ -65,8 +76,19 @@ export default function Dashboard() {
       }
       setAssignModalOpen(false);
       loadTasks();
+      loadAssignedTasks();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not assign that task.');
+    }
+  }
+
+  async function handleDeleteAssignedTask(task) {
+    if (!window.confirm(`Delete "${task.title}"?`)) return;
+    try {
+      await api.delete(`/tasks/${task.id}`);
+      loadAssignedTasks();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not delete that task.');
     }
   }
 
@@ -104,6 +126,12 @@ export default function Dashboard() {
 
       {error && <div className="form-error" style={{ marginTop: '1.5rem' }}>{error}</div>}
 
+      {hasPermission('financial_reports') && (
+        <div className="dashboard-card">
+          <FinancialReports />
+        </div>
+      )}
+
       <div className="dashboard-card">
         <div className="dashboard-section-header">
           <h3>My tasks</h3>
@@ -125,6 +153,23 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {!assignedLoading && assignedTasks.length > 0 && (
+        <div className="dashboard-card">
+          <div className="dashboard-section-header">
+            <h3>Tasks you've assigned</h3>
+            <span className="subtitle" style={{ margin: 0 }}>
+              {assignedTasks.filter((t) => t.status !== 'done').length} open
+            </span>
+          </div>
+          <TaskList
+            tasks={assignedTasks}
+            showAssignedTo
+            onDelete={handleDeleteAssignedTask}
+            onOpenDocs={setDocsTask}
+          />
+        </div>
+      )}
 
       {employee?.id && (
         <div className="dashboard-card">

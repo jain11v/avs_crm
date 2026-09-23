@@ -17,6 +17,12 @@ async function getAlerts(req, res, next) {
 
     const alerts = [];
 
+    // Computed once, shared by every block below scoped to "self + whoever
+    // reports up to me" (renewals_due, tasks_overdue) — admin stays null
+    // (unscoped, sees everything), matching selfAndDescendantIds' one other
+    // caller pattern (performanceController.js).
+    const hierarchyIds = role !== 'admin' ? await selfAndDescendantIds(req.employee.id) : null;
+
     if (hasPage('renewals')) {
       // Scoped by ownership (policies.user_id) for anyone but admin — same
       // rule as policyController.getRenewalsDue(): an employee only gets
@@ -24,9 +30,8 @@ async function getAlerts(req, res, next) {
       // notified about their team's.
       const ownerParams = [];
       let ownerFilter = '';
-      if (role !== 'admin') {
-        const ownerIds = await selfAndDescendantIds(req.employee.id);
-        ownerParams.push(ownerIds);
+      if (hierarchyIds) {
+        ownerParams.push(hierarchyIds);
         ownerFilter = `AND p.user_id = ANY($${ownerParams.length})`;
       }
 
@@ -60,6 +65,53 @@ async function getAlerts(req, res, next) {
           items: result.rows.map((r) => ({
             label: `${r.policy_number} — ${r.customer_name || 'Unknown'} (due ${new Date(r.policy_end_date).toLocaleDateString('en-IN')})`,
             link: `/policies/${r.id}/edit`,
+          })),
+        });
+      }
+    }
+
+    {
+      // Tasks have no page permission at all (self-service /tasks/mine is
+      // ungated for everyone), so this block is unconditional too — same
+      // reasoning as the dashboard's own my_lost_leads stat. Reuses the
+      // same hierarchy scope as renewals_due just above: an employee with
+      // no reports only sees their own overdue tasks (already visible in
+      // their own list); a manager additionally sees their team's, which
+      // is the actual gap this closes — nothing today tells a manager one
+      // of their reports let a task slip.
+      const scopeParams = [];
+      let scopeFilter = '';
+      if (hierarchyIds) {
+        scopeParams.push(hierarchyIds);
+        scopeFilter = `AND t.assigned_to = ANY($${scopeParams.length})`;
+      }
+
+      const result = await db.query(
+        `SELECT t.id, t.title, t.due_date, t.assigned_to, e.first_name, e.last_name
+         FROM tasks t
+         JOIN employees e ON t.assigned_to = e.id
+         WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
+           ${scopeFilter}
+         ORDER BY t.due_date ASC
+         LIMIT 5`,
+        scopeParams
+      );
+      const countResult = await db.query(
+        `SELECT COUNT(*) FROM tasks t
+         WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
+           ${scopeFilter}`,
+        scopeParams
+      );
+      const count = parseInt(countResult.rows[0].count);
+      if (count > 0) {
+        alerts.push({
+          type: 'tasks_overdue',
+          count,
+          message: `${count} task${count === 1 ? '' : 's'} overdue`,
+          viewAllLink: null,
+          items: result.rows.map((r) => ({
+            label: `${r.title} — ${r.first_name} ${r.last_name} (due ${new Date(r.due_date).toLocaleDateString('en-IN')})`,
+            link: `/employees/${r.assigned_to}/edit`,
           })),
         });
       }

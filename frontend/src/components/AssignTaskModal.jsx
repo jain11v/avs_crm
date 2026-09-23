@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const EMPTY_FORM = { title: '', description: '', due_date: '', priority: 'normal', assigned_to: '' };
+const EMPTY_FORM = { title: '', description: '', due_date: '', priority: 'normal', assigned_to: '', recurrence: 'none' };
 
 // Two ways to open this: from an employee's own record (lockedEmployeeId
 // fixes who it goes to) or from the Dashboard (employees is a picker list,
@@ -49,11 +49,16 @@ export default function AssignTaskModal({ open, employees, lockedEmployeeId, loc
       setError('Choose who to assign this to.');
       return;
     }
+    if (form.recurrence !== 'none' && !form.due_date) {
+      setError('A due date is required for a repeating task.');
+      return;
+    }
     onSave({
       title: form.title.trim(),
       description: form.description.trim() || null,
       due_date: form.due_date || null,
       priority: form.priority,
+      recurrence: form.recurrence,
       assigned_to: assignedTo,
       files,
     });
@@ -104,6 +109,16 @@ export default function AssignTaskModal({ open, employees, lockedEmployeeId, loc
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
                 <option value="high">High</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Repeats</label>
+              <select name="recurrence" value={form.recurrence} onChange={handleChange}>
+                <option value="none">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
               </select>
             </div>
 

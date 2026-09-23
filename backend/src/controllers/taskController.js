@@ -6,10 +6,12 @@ const FK_FIELD_NAMES = {
 
 const TASK_SELECT = `
   SELECT t.*, e.first_name AS assigned_by_first_name, e.last_name AS assigned_by_last_name,
+         a.first_name AS assigned_to_first_name, a.last_name AS assigned_to_last_name,
          p.policy_number AS policy_number,
          (SELECT COUNT(*) FROM documents d WHERE d.entity_type = 'task' AND d.entity_id = t.id)::int AS document_count
   FROM tasks t
   LEFT JOIN employees e ON t.assigned_by = e.id
+  LEFT JOIN employees a ON t.assigned_to = a.id
   LEFT JOIN policies p ON t.policy_id = p.id
 `;
 
@@ -59,6 +61,25 @@ async function listMine(req, res, next) {
   }
 }
 
+// GET /api/tasks/assigned — tasks the logged-in employee handed to someone
+// else (assigned_by = me), so a manager can see what they delegated
+// without having to open each report's own record individually. Excludes
+// self-assigned personal to-dos (assigned_to = assigned_by = me) — those
+// already show up in /tasks/mine.
+async function listAssigned(req, res, next) {
+  try {
+    const result = await db.query(
+      `${TASK_SELECT}
+       WHERE t.assigned_by = $1 AND t.assigned_to != $1
+       ORDER BY (t.status = 'done'), t.due_date NULLS LAST, t.created_at DESC`,
+      [req.employee.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/tasks?assigned_to=  — tasks for a specific employee, e.g. shown
 // on their record in the Employees page. Only that employee, their
 // reporting manager, or an admin may view it.
@@ -84,10 +105,12 @@ async function list(req, res, next) {
   }
 }
 
-// POST /api/tasks  { assigned_to, title, description, due_date, priority }
+const RECURRENCE_VALUES = ['none', 'daily', 'weekly', 'monthly'];
+
+// POST /api/tasks  { assigned_to, title, description, due_date, priority, recurrence }
 async function create(req, res, next) {
   try {
-    const { assigned_to, title, description, due_date, priority } = req.body;
+    const { assigned_to, title, description, due_date, priority, recurrence } = req.body;
     if (!assigned_to || !title || !title.trim()) {
       return res.status(400).json({ error: 'Missing required fields: assigned_to, title.' });
     }
@@ -97,12 +120,18 @@ async function create(req, res, next) {
     if (priority && !['low', 'normal', 'high'].includes(priority)) {
       return res.status(400).json({ error: 'priority must be one of: low, normal, high.' });
     }
+    if (recurrence && !RECURRENCE_VALUES.includes(recurrence)) {
+      return res.status(400).json({ error: `recurrence must be one of: ${RECURRENCE_VALUES.join(', ')}.` });
+    }
+    if (recurrence && recurrence !== 'none' && !due_date) {
+      return res.status(400).json({ error: 'A due date is required for a repeating task.' });
+    }
 
     const result = await db.query(
-      `INSERT INTO tasks (title, description, assigned_to, assigned_by, due_date, priority)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO tasks (title, description, assigned_to, assigned_by, due_date, priority, recurrence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [title.trim(), description || null, assigned_to, req.employee.id, due_date || null, priority || 'normal']
+      [title.trim(), description || null, assigned_to, req.employee.id, due_date || null, priority || 'normal', recurrence || 'none']
     );
     res.status(201).json({ id: result.rows[0].id });
   } catch (err) {
@@ -115,32 +144,60 @@ async function create(req, res, next) {
 
 // PATCH /api/tasks/:id/status  { status }
 // Only the assignee moves their own task through pending -> in_progress ->
-// done (or back) — an admin may also do it on anyone's behalf.
+// done (or back) — an admin may also do it on anyone's behalf. Completing a
+// repeating task (recurrence != 'none') also creates the next occurrence in
+// the same transaction, due_date advanced by the recurrence interval.
+// Deliberately not wired into markLost(): that path sets status='done' too,
+// but a lost lead shouldn't spawn a fresh recurring task.
 async function updateStatus(req, res, next) {
+  const client = await db.pool.connect();
   try {
     const { status } = req.body;
     if (!['pending', 'in_progress', 'done'].includes(status)) {
       return res.status(400).json({ error: 'status must be one of: pending, in_progress, done.' });
     }
 
-    const existing = await db.query('SELECT assigned_to FROM tasks WHERE id = $1', [req.params.id]);
+    const existing = await client.query(
+      'SELECT assigned_to, assigned_by, title, description, priority, recurrence, due_date FROM tasks WHERE id = $1',
+      [req.params.id]
+    );
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Task not found.' });
     }
-    if (req.employee.role !== 'admin' && String(existing.rows[0].assigned_to) !== String(req.employee.id)) {
+    const task = existing.rows[0];
+    if (req.employee.role !== 'admin' && String(task.assigned_to) !== String(req.employee.id)) {
       return res.status(403).json({ error: 'Only the person this task is assigned to can update it.' });
     }
 
-    const result = await db.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE tasks SET status = $1, updated_at = CURRENT_TIMESTAMP,
-              completed_at = CASE WHEN $1 = 'done' THEN CURRENT_TIMESTAMP ELSE NULL END
+              completed_at = CASE WHEN $1::varchar = 'done' THEN CURRENT_TIMESTAMP ELSE NULL END
        WHERE id = $2
        RETURNING id`,
       [status, req.params.id]
     );
+
+    if (status === 'done' && task.recurrence !== 'none') {
+      await client.query(
+        `INSERT INTO tasks (title, description, assigned_to, assigned_by, due_date, priority, recurrence, recurrence_parent_id)
+         VALUES (
+           $1, $2, $3, $4,
+           ($5::date) + (CASE $6 WHEN 'daily' THEN INTERVAL '1 day' WHEN 'weekly' THEN INTERVAL '7 days' ELSE INTERVAL '1 month' END),
+           $7, $6, $8
+         )`,
+        [task.title, task.description, task.assigned_to, task.assigned_by, task.due_date, task.recurrence, task.priority, req.params.id]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ id: result.rows[0].id, status });
   } catch (err) {
+    await client.query('ROLLBACK');
     next(err);
+  } finally {
+    client.release();
   }
 }
 
@@ -193,8 +250,11 @@ async function remove(req, res, next) {
     await db.query('DELETE FROM tasks WHERE id = $1', [req.params.id]);
     res.json({ message: 'Task deleted.' });
   } catch (err) {
+    if (err.code === '23503') {
+      return res.status(409).json({ error: 'This task has a recurring occurrence linked to it and cannot be deleted.' });
+    }
     next(err);
   }
 }
 
-module.exports = { listMine, list, create, updateStatus, markLost, remove };
+module.exports = { listMine, listAssigned, list, create, updateStatus, markLost, remove };
