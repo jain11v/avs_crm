@@ -20,6 +20,7 @@ const EMPTY_FORM = {
   state_id: '',
   city_id: '',
   salary: '',
+  annual_leave_entitlement: '12',
   date_of_birth: '',
   date_of_joining: '',
   date_of_resign: '',
@@ -30,10 +31,7 @@ const EMPTY_FORM = {
   designation_id: '',
   reporting_to: '',
   reporting_branch: '',
-  role: 'employee',
 };
-
-const ROLE_OPTIONS = ['employee', 'manager', 'admin'];
 
 export default function EmployeeForm() {
   const { id } = useParams();
@@ -42,6 +40,7 @@ export default function EmployeeForm() {
   const { employee: currentEmployee } = useAuth();
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentRole, setCurrentRole] = useState('');
   const [tasks, setTasks] = useState([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [docsTask, setDocsTask] = useState(null);
@@ -54,6 +53,11 @@ export default function EmployeeForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [newFiles, setNewFiles] = useState([]);
+
+  function handleNewFilesSelected(e) {
+    setNewFiles(Array.from(e.target.files || []));
+  }
 
   useEffect(() => {
     api.get('/lookups/states').then((res) => setStates(res.data));
@@ -78,6 +82,7 @@ export default function EmployeeForm() {
           state_id: e.state_id || '',
           city_id: e.city_id || '',
           salary: e.salary || '',
+          annual_leave_entitlement: e.annual_leave_entitlement ?? '12',
           date_of_birth: e.date_of_birth ? e.date_of_birth.slice(0, 10) : '',
           date_of_joining: e.date_of_joining ? e.date_of_joining.slice(0, 10) : '',
           date_of_resign: e.date_of_resign ? e.date_of_resign.slice(0, 10) : '',
@@ -88,8 +93,8 @@ export default function EmployeeForm() {
           designation_id: e.designation_id || '',
           reporting_to: e.reporting_to || '',
           reporting_branch: e.reporting_branch || '',
-          role: e.role || 'employee',
         });
+        setCurrentRole(e.role || 'employee');
       })
       .catch((err) => setError(err.response?.data?.error || 'Could not load employee.'))
       .finally(() => setLoading(false));
@@ -177,7 +182,10 @@ export default function EmployeeForm() {
       if (isEdit) {
         await api.put(`/employees/${id}`, payload);
       } else {
-        await api.post('/employees', payload);
+        const res = await api.post('/employees', payload);
+        if (newFiles.length > 0) {
+          await uploadFiles(newFiles, 'employee', res.data.id);
+        }
       }
       navigate('/employees');
     } catch (err) {
@@ -215,8 +223,8 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Gender</label>
-            <select name="gender" value={form.gender} onChange={handleChange}>
+            <label>Gender{!isEdit && ' *'}</label>
+            <select name="gender" value={form.gender} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
@@ -229,7 +237,7 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Phone</label>
+            <label>Phone{!isEdit && ' *'}</label>
             <input
               name="phone"
               value={form.phone}
@@ -238,22 +246,23 @@ export default function EmployeeForm() {
               maxLength={10}
               pattern="[6-9][0-9]{9}"
               title="10 digits, starting with 6-9"
+              required={!isEdit}
             />
           </div>
 
           <div className="field">
-            <label>Date of birth</label>
-            <input type="date" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} />
+            <label>Date of birth{!isEdit && ' *'}</label>
+            <input type="date" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} required={!isEdit} />
           </div>
 
           <div className="field field-wide">
-            <label>Address</label>
-            <input name="address" value={form.address} onChange={handleChange} />
+            <label>Address{!isEdit && ' *'}</label>
+            <input name="address" value={form.address} onChange={handleChange} required={!isEdit} />
           </div>
 
           <div className="field">
-            <label>State</label>
-            <select name="state_id" value={form.state_id} onChange={handleChange}>
+            <label>State{!isEdit && ' *'}</label>
+            <select name="state_id" value={form.state_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {states.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -262,8 +271,8 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>City</label>
-            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id}>
+            <label>City{!isEdit && ' *'}</label>
+            <select name="city_id" value={form.city_id} onChange={handleChange} disabled={!form.state_id} required={!isEdit}>
               <option value="">—</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -298,8 +307,8 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Department</label>
-            <select name="department_id" value={form.department_id} onChange={handleChange}>
+            <label>Department{!isEdit && ' *'}</label>
+            <select name="department_id" value={form.department_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
@@ -308,8 +317,8 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Designation</label>
-            <select name="designation_id" value={form.designation_id} onChange={handleChange}>
+            <label>Designation{!isEdit && ' *'}</label>
+            <select name="designation_id" value={form.designation_id} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {designations.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
@@ -328,8 +337,8 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Reporting branch</label>
-            <select name="reporting_branch" value={form.reporting_branch} onChange={handleChange}>
+            <label>Reporting branch{!isEdit && ' *'}</label>
+            <select name="reporting_branch" value={form.reporting_branch} onChange={handleChange} required={!isEdit}>
               <option value="">—</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -337,18 +346,21 @@ export default function EmployeeForm() {
             </select>
           </div>
 
-          <div className="field">
-            <label>Role</label>
-            <select name="role" value={form.role} onChange={handleChange}>
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+          {isEdit && (
+            <div className="field">
+              <label>Role</label>
+              <p className="subtitle" style={{ margin: '0.4rem 0 0', textTransform: 'capitalize' }}>
+                {currentRole || 'employee'}
+              </p>
+              <p className="subtitle" style={{ margin: '0.2rem 0 0', fontSize: '0.85em' }}>
+                Changed from Admin, not here.
+              </p>
+            </div>
+          )}
 
           <div className="field">
-            <label>Date of joining</label>
-            <input type="date" name="date_of_joining" value={form.date_of_joining} onChange={handleChange} />
+            <label>Date of joining{!isEdit && ' *'}</label>
+            <input type="date" name="date_of_joining" value={form.date_of_joining} onChange={handleChange} required={!isEdit} />
           </div>
 
           <div className="field">
@@ -357,8 +369,13 @@ export default function EmployeeForm() {
           </div>
 
           <div className="field">
-            <label>Salary</label>
-            <input type="number" step="0.01" min="0" name="salary" value={form.salary} onChange={handleChange} />
+            <label>Salary{!isEdit && ' *'}</label>
+            <input type="number" step="0.01" min="0" name="salary" value={form.salary} onChange={handleChange} required={!isEdit} />
+          </div>
+
+          <div className="field">
+            <label>Annual leave entitlement (days)</label>
+            <input type="number" step="1" min="0" name="annual_leave_entitlement" value={form.annual_leave_entitlement} onChange={handleChange} />
           </div>
 
           <div className="field">
@@ -368,6 +385,23 @@ export default function EmployeeForm() {
               name="business_expected" value={form.business_expected} onChange={handleChange}
             />
           </div>
+
+          {!isEdit && (
+            <div className="field field-wide">
+              <label>Documents</label>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={handleNewFilesSelected}
+              />
+              {newFiles.length > 0 && (
+                <p className="subtitle" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
+                  {newFiles.length} file{newFiles.length > 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="form-actions">
@@ -399,7 +433,7 @@ export default function EmployeeForm() {
             />
           </div>
 
-          <DocumentsPanel entityType="employee" entityId={id} title="Files sent to this employee" />
+          <DocumentsPanel entityType="employee" entityId={id} title="Documents" />
 
           <AssignTaskModal
             open={assignModalOpen}

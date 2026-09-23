@@ -108,14 +108,29 @@ async function getById(req, res, next) {
   }
 }
 
+// 'role' is deliberately excluded — it can only be changed via the
+// admin-only PATCH /:id/credentials below, never through the plain
+// create/update path (which is only gated by page permission, not role).
 const EDITABLE_FIELDS = [
   'first_name', 'last_name', 'gender', 'email', 'phone', 'address',
-  'city_id', 'state_id', 'salary', 'date_of_birth', 'date_of_joining', 'date_of_resign',
+  'city_id', 'state_id', 'salary', 'annual_leave_entitlement', 'date_of_birth', 'date_of_joining', 'date_of_resign',
   'aadhar', 'pan', 'business_expected', 'reporting_to', 'reporting_branch',
-  'department_id', 'designation_id', 'role',
+  'department_id', 'designation_id',
 ];
 
 const REQUIRED_FIELDS = ['first_name', 'last_name', 'email'];
+
+// Required only when creating a new employee, not on every edit — several
+// existing employees predate this rule and are missing one or more of
+// these fields, and EmployeeForm.jsx submits the whole form (not just
+// changed fields) on every save, so folding these into REQUIRED_FIELDS
+// (which update() also uses, to block clearing an already-set field) would
+// block unrelated edits to those legacy records.
+const REQUIRED_ON_CREATE = [
+  ...REQUIRED_FIELDS,
+  'gender', 'phone', 'date_of_birth', 'address', 'state_id', 'city_id',
+  'department_id', 'designation_id', 'reporting_branch', 'date_of_joining', 'salary',
+];
 
 function pickFields(body) {
   const out = {};
@@ -127,16 +142,12 @@ function pickFields(body) {
   return out;
 }
 
-function missingRequiredFields(fields) {
-  return REQUIRED_FIELDS.filter((f) => fields[f] === undefined || fields[f] === null || fields[f] === '');
-}
-
 // POST /api/employees
 async function create(req, res, next) {
   try {
     const fields = pickFields(normalizeFormats(req.body));
 
-    const missing = missingRequiredFields(fields);
+    const missing = REQUIRED_ON_CREATE.filter((f) => fields[f] === undefined || fields[f] === null || fields[f] === '');
     if (missing.length > 0) {
       return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}.` });
     }
@@ -219,9 +230,28 @@ async function update(req, res, next) {
   }
 }
 
+// Deactivating/deleting is gated only by page permission, same as the rest
+// of this controller — but an admin must never be deactivatable/deletable
+// by anyone but another admin, regardless of who holds the "employees"
+// page, matching this app's "admin can never be locked out" convention.
+async function assertNotDemotingAdmin(req, res) {
+  const target = await db.query('SELECT role FROM employees WHERE id = $1', [req.params.id]);
+  if (target.rows.length === 0) {
+    res.status(404).json({ error: 'Employee not found.' });
+    return false;
+  }
+  if (target.rows[0].role === 'admin' && req.employee.role !== 'admin') {
+    res.status(403).json({ error: 'Only an admin can deactivate or delete an admin.' });
+    return false;
+  }
+  return true;
+}
+
 // PATCH /api/employees/:id/status  { is_active: true|false }
 async function setStatus(req, res, next) {
   try {
+    if (!(await assertNotDemotingAdmin(req, res))) return;
+
     const { is_active } = req.body;
     const result = await db.query(
       'UPDATE employees SET is_active = $1 WHERE id = $2 RETURNING id',
@@ -241,6 +271,8 @@ async function setStatus(req, res, next) {
 // DELETE /api/employees/:id
 async function remove(req, res, next) {
   try {
+    if (!(await assertNotDemotingAdmin(req, res))) return;
+
     const result = await db.query('DELETE FROM employees WHERE id = $1 RETURNING id', [req.params.id]);
 
     if (result.rows.length === 0) {
