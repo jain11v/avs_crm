@@ -9,6 +9,7 @@ const FK_FIELD_NAMES = {
   employees_reporting_branch_fkey: 'Reporting branch',
   employees_department_id_fkey: 'Department',
   employees_designation_id_fkey: 'Designation',
+  employees_role_fkey: 'Role',
   customers_employee_id_fkey: 'Employee',
   policies_user_id_fkey: 'Employee',
   policies_telecaller_fkey: 'Employee',
@@ -20,9 +21,6 @@ function friendlyForeignKeyError(err) {
 }
 
 function friendlyCheckError(err) {
-  if (err.constraint === 'employees_role_check') {
-    return 'Role must be one of: employee, manager, admin.';
-  }
   if (err.constraint === 'employees_gender_check') {
     return 'Gender must be one of: Male, Female.';
   }
@@ -294,9 +292,10 @@ async function remove(req, res, next) {
 // Admin-only (enforced in the route). This is the "create new user" /
 // "reset password" action on the admin page: an employee record has no
 // login until an admin sets a password here, and role can be changed in
-// the same request. At least one of the two must be given.
-const ROLES = ['employee', 'manager', 'admin'];
-
+// the same request. At least one of the two must be given. `role` isn't
+// pre-validated against a fixed list — it relies on the employees_role_fkey
+// FK (roles are now data, see roleController.js), same as every other
+// FK-validated dropdown field in this file.
 async function setCredentials(req, res, next) {
   try {
     const { password, role } = req.body;
@@ -306,9 +305,6 @@ async function setCredentials(req, res, next) {
     }
     if (password !== undefined && (!password || password.length < 6)) {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
-    }
-    if (role !== undefined && !ROLES.includes(role)) {
-      return res.status(400).json({ error: 'Role must be one of: employee, manager, admin.' });
     }
 
     const setClauses = [];
@@ -335,6 +331,9 @@ async function setCredentials(req, res, next) {
 
     res.json({ id: result.rows[0].id });
   } catch (err) {
+    if (err.code === '23503') {
+      return res.status(400).json({ error: friendlyForeignKeyError(err) });
+    }
     next(err);
   }
 }

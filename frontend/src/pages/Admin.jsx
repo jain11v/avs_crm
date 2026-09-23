@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 import Layout from '../components/Layout';
-import { PAGES, ROLES } from '../pages';
+import { PAGES } from '../pages';
 
-const ROLE_OPTIONS = ['employee', 'manager', 'admin'];
 const PAGE_SIZE = 50;
 
 // Admin-only: turn an employee record into a login ("create user"), reset
-// a password, change a role, and decide which pages each role can see.
+// a password, change a role, manage custom roles, and decide which pages
+// each role can see.
 export default function Admin() {
   const [employees, setEmployees] = useState([]);
   const [empLoading, setEmpLoading] = useState(true);
@@ -19,7 +19,21 @@ export default function Admin() {
   const [rowSaving, setRowSaving] = useState(false);
   const [rowError, setRowError] = useState('');
 
-  const [matrix, setMatrix] = useState({ employee: [], manager: [] });
+  // Full role list (includes admin) — used for the Users table's role
+  // dropdown and the Roles section below. Separate from the
+  // role-permissions matrix's role list, which deliberately excludes admin.
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
+  const [roleError, setRoleError] = useState('');
+  const [newRoleLabel, setNewRoleLabel] = useState('');
+  const [newRoleElevated, setNewRoleElevated] = useState(false);
+  const [roleSaving, setRoleSaving] = useState(false);
+  const [editingRoleId, setEditingRoleId] = useState(null);
+  const [editRoleLabel, setEditRoleLabel] = useState('');
+  const [editRoleElevated, setEditRoleElevated] = useState(false);
+
+  const [matrixRoles, setMatrixRoles] = useState([]);
+  const [matrix, setMatrix] = useState({});
   const [matrixLoading, setMatrixLoading] = useState(true);
   const [matrixSaving, setMatrixSaving] = useState(false);
   const [matrixError, setMatrixError] = useState('');
@@ -38,17 +52,36 @@ export default function Admin() {
     }
   }, []);
 
-  useEffect(() => {
-    loadEmployees();
-  }, [loadEmployees]);
-
-  useEffect(() => {
-    api
-      .get('/role-permissions')
-      .then((res) => setMatrix(res.data.matrix))
-      .catch((err) => setMatrixError(err.response?.data?.error || 'Could not load permissions.'))
-      .finally(() => setMatrixLoading(false));
+  const loadRoles = useCallback(async () => {
+    setRolesLoading(true);
+    setRoleError('');
+    try {
+      const res = await api.get('/roles');
+      setRoles(res.data);
+    } catch (err) {
+      setRoleError(err.response?.data?.error || 'Could not load roles.');
+    } finally {
+      setRolesLoading(false);
+    }
   }, []);
+
+  const loadMatrix = useCallback(async () => {
+    setMatrixLoading(true);
+    setMatrixError('');
+    try {
+      const res = await api.get('/role-permissions');
+      setMatrixRoles(res.data.roles);
+      setMatrix(res.data.matrix);
+    } catch (err) {
+      setMatrixError(err.response?.data?.error || 'Could not load permissions.');
+    } finally {
+      setMatrixLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
+  useEffect(() => { loadRoles(); }, [loadRoles]);
+  useEffect(() => { loadMatrix(); }, [loadMatrix]);
 
   function startEdit(emp) {
     setEditingId(emp.id);
@@ -85,6 +118,67 @@ export default function Admin() {
       setRowError(err.response?.data?.error || 'Could not save.');
     } finally {
       setRowSaving(false);
+    }
+  }
+
+  async function handleAddRole(e) {
+    e.preventDefault();
+    setRoleError('');
+    if (!newRoleLabel.trim()) {
+      setRoleError('Role name is required.');
+      return;
+    }
+    setRoleSaving(true);
+    try {
+      await api.post('/roles', { label: newRoleLabel.trim(), is_elevated: newRoleElevated });
+      setNewRoleLabel('');
+      setNewRoleElevated(false);
+      await Promise.all([loadRoles(), loadMatrix()]);
+    } catch (err) {
+      setRoleError(err.response?.data?.error || 'Could not create role.');
+    } finally {
+      setRoleSaving(false);
+    }
+  }
+
+  function startEditRole(role) {
+    setEditingRoleId(role.id);
+    setEditRoleLabel(role.label);
+    setEditRoleElevated(role.is_elevated);
+    setRoleError('');
+  }
+
+  function cancelEditRole() {
+    setEditingRoleId(null);
+    setRoleError('');
+  }
+
+  async function saveEditRole(role) {
+    setRoleError('');
+    if (!editRoleLabel.trim()) {
+      setRoleError('Role name is required.');
+      return;
+    }
+    setRoleSaving(true);
+    try {
+      await api.put(`/roles/${role.id}`, { label: editRoleLabel.trim(), is_elevated: editRoleElevated });
+      setEditingRoleId(null);
+      await Promise.all([loadRoles(), loadMatrix()]);
+    } catch (err) {
+      setRoleError(err.response?.data?.error || 'Could not save role.');
+    } finally {
+      setRoleSaving(false);
+    }
+  }
+
+  async function handleDeleteRole(role) {
+    if (!window.confirm(`Delete the "${role.label}" role?`)) return;
+    setRoleError('');
+    try {
+      await api.delete(`/roles/${role.id}`);
+      await Promise.all([loadRoles(), loadMatrix()]);
+    } catch (err) {
+      setRoleError(err.response?.data?.error || 'Could not delete role.');
     }
   }
 
@@ -149,12 +243,12 @@ export default function Admin() {
                 <td style={{ textTransform: 'capitalize' }}>
                   {editingId === emp.id ? (
                     <select value={editRole} onChange={(e) => setEditRole(e.target.value)}>
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>{r}</option>
+                      {roles.map((r) => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
                       ))}
                     </select>
                   ) : (
-                    emp.role
+                    roles.find((r) => r.key === emp.role)?.label || emp.role
                   )}
                 </td>
                 <td>
@@ -191,9 +285,104 @@ export default function Admin() {
       )}
       {editingId !== null && rowError && <div className="form-error" style={{ marginTop: '0.75rem' }}>{rowError}</div>}
 
+      <h3 style={{ marginTop: '2.5rem' }}>Roles</h3>
+      <p className="subtitle">
+        Employee, Manager, and Admin are built in and can't be renamed or removed. Add a custom role for anything else —
+        "Elevated" grants the same team-oversight access Manager has (approvals, seeing others' records), separate from
+        page access below. Elevation changes take effect for that role's holders the next time they log in, not immediately.
+      </p>
+
+      {roleError && <div className="form-error">{roleError}</div>}
+
+      {rolesLoading ? (
+        <p className="subtitle">Loading…</p>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Elevated</th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((r) => (
+              <tr key={r.id}>
+                <td>
+                  {editingRoleId === r.id ? (
+                    <input
+                      className="table-input"
+                      value={editRoleLabel}
+                      onChange={(e) => setEditRoleLabel(e.target.value)}
+                    />
+                  ) : (
+                    r.label
+                  )}
+                  {r.is_builtin && (
+                    <span className="status-pill inactive" style={{ marginLeft: '0.5rem' }}>Built-in</span>
+                  )}
+                </td>
+                <td>
+                  {editingRoleId === r.id ? (
+                    <input
+                      type="checkbox"
+                      checked={editRoleElevated}
+                      onChange={(e) => setEditRoleElevated(e.target.checked)}
+                    />
+                  ) : (
+                    <span className={`status-pill ${r.is_elevated ? 'active' : 'inactive'}`}>
+                      {r.is_elevated ? 'Yes' : 'No'}
+                    </span>
+                  )}
+                </td>
+                <td colSpan={2}>
+                  {r.is_builtin ? null : editingRoleId === r.id ? (
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn-link" onClick={() => saveEditRole(r)} disabled={roleSaving}>
+                        {roleSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button className="btn-link" onClick={cancelEditRole}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn-link" onClick={() => startEditRole(r)}>Edit</button>
+                      <button className="btn-link" onClick={() => handleDeleteRole(r)}>Delete</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <form
+        onSubmit={handleAddRole}
+        style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '1rem' }}
+      >
+        <input
+          placeholder="New role name, e.g. Accountant"
+          value={newRoleLabel}
+          onChange={(e) => setNewRoleLabel(e.target.value)}
+          style={{ minWidth: 220 }}
+        />
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={newRoleElevated}
+            onChange={(e) => setNewRoleElevated(e.target.checked)}
+          />
+          {' '}Elevated
+        </label>
+        <button type="submit" className="btn-secondary" disabled={roleSaving}>
+          {roleSaving ? 'Adding…' : '+ Add role'}
+        </button>
+      </form>
+
       <h3 style={{ marginTop: '2.5rem' }}>Page access by role</h3>
       <p className="subtitle">
-        Admin always has every page — only employee and manager can be restricted here.
+        Admin always has every page — only the roles below can be restricted here.
       </p>
 
       {matrixError && <div className="form-error">{matrixError}</div>}
@@ -206,8 +395,8 @@ export default function Admin() {
             <thead>
               <tr>
                 <th>Page</th>
-                {ROLES.map((role) => (
-                  <th key={role} style={{ textTransform: 'capitalize' }}>{role}</th>
+                {matrixRoles.map((role) => (
+                  <th key={role.key}>{role.label}</th>
                 ))}
               </tr>
             </thead>
@@ -215,12 +404,12 @@ export default function Admin() {
               {PAGES.map((p) => (
                 <tr key={p.key}>
                   <td>{p.label}</td>
-                  {ROLES.map((role) => (
-                    <td key={role}>
+                  {matrixRoles.map((role) => (
+                    <td key={role.key}>
                       <input
                         type="checkbox"
-                        checked={(matrix[role] || []).includes(p.key)}
-                        onChange={() => togglePermission(role, p.key)}
+                        checked={(matrix[role.key] || []).includes(p.key)}
+                        onChange={() => togglePermission(role.key, p.key)}
                       />
                     </td>
                   ))}

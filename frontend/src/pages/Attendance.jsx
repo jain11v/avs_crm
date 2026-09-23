@@ -27,7 +27,7 @@ function rosterStatusLabel(row, date) {
 
 export default function Attendance() {
   const { employee } = useAuth();
-  const isManager = employee?.role === 'admin' || employee?.role === 'manager';
+  const isManager = employee?.role === 'admin' || employee?.is_elevated;
 
   const [today, setToday] = useState(null);
   const [todayLoading, setTodayLoading] = useState(true);

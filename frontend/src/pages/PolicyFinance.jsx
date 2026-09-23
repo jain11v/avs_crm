@@ -26,7 +26,7 @@ export default function PolicyFinance() {
   const location = useLocation();
   const navigate = useNavigate();
   const { employee } = useAuth();
-  const canDecide = employee?.role === 'admin' || employee?.role === 'manager';
+  const canDecide = employee?.role === 'admin' || employee?.is_elevated;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);

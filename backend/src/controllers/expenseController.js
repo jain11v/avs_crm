@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
-function isManager(req) {
-  return req.employee.role === 'admin' || req.employee.role === 'manager';
+function isElevated(req) {
+  return req.employee.role === 'admin' || req.employee.is_elevated;
 }
 
 const FK_FIELD_NAMES = {
@@ -141,7 +141,7 @@ async function create(req, res, next) {
   try {
     const fields = pickFields(req.body);
 
-    if (fields.user_id && String(fields.user_id) !== String(req.employee.id) && !isManager(req)) {
+    if (fields.user_id && String(fields.user_id) !== String(req.employee.id) && !isElevated(req)) {
       return res.status(403).json({ error: 'Only a manager or admin can file an expense on someone else’s behalf.' });
     }
 
@@ -201,13 +201,13 @@ async function update(req, res, next) {
     if (existing.rows[0].status === 'approved') {
       return res.status(409).json({ error: 'This expense has already been approved and cannot be edited.' });
     }
-    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isManager(req)) {
+    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isElevated(req)) {
       return res.status(403).json({ error: 'You cannot edit someone else’s expense.' });
     }
 
     const fields = pickFields(req.body);
 
-    if (fields.user_id && String(fields.user_id) !== String(existing.rows[0].user_id) && !isManager(req)) {
+    if (fields.user_id && String(fields.user_id) !== String(existing.rows[0].user_id) && !isElevated(req)) {
       return res.status(403).json({ error: 'Only a manager or admin can reassign an expense to someone else.' });
     }
 
@@ -330,7 +330,7 @@ async function remove(req, res, next) {
     if (existing.rows[0].status === 'approved') {
       return res.status(409).json({ error: 'This expense has already been approved and cannot be deleted.' });
     }
-    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isManager(req)) {
+    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isElevated(req)) {
       return res.status(403).json({ error: 'You cannot delete someone else’s expense.' });
     }
 

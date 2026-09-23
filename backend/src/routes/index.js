@@ -36,6 +36,7 @@ router.use('/documents', require('./documentRoutes'));
 router.use('/tasks', require('./taskRoutes'));
 router.use('/chat', require('./chatRoutes'));
 router.use('/role-permissions', require('./rolePermissionRoutes'));
+router.use('/roles', require('./roleRoutes'));
 router.use('/lookups', require('./lookupRoutes'));
 
 module.exports = router;

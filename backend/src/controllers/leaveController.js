@@ -4,8 +4,8 @@ const { selfAndDescendantIds } = require('../utils/orgHierarchy');
 
 const AUDIT_FIELDS = ['leave_type', 'start_date', 'end_date', 'reason', 'status', 'approver_remarks'];
 
-function isManager(req) {
-  return req.employee.role === 'admin' || req.employee.role === 'manager';
+function isElevated(req) {
+  return req.employee.role === 'admin' || req.employee.is_elevated;
 }
 
 function friendlyForeignKeyError(err) {
@@ -40,7 +40,7 @@ async function create(req, res, next) {
 
     let employeeId = req.employee.id;
     if (req.body.employee_id && String(req.body.employee_id) !== String(req.employee.id)) {
-      if (!isManager(req)) {
+      if (!isElevated(req)) {
         return res.status(403).json({ error: 'Only a manager or admin can apply for leave on someone else’s behalf.' });
       }
       employeeId = req.body.employee_id;
@@ -126,9 +126,10 @@ async function list(req, res, next) {
 
 // PATCH /api/leave/:id/decision  { decision: 'approved'|'rejected', approver_remarks }
 // Restricted to the requester's direct reporting manager, or admin —
-// deliberately stricter than the generic isManager() check used elsewhere,
-// since any manager in the chain approving anyone's leave would blur who's
-// actually responsible for it.
+// deliberately stricter than the generic isElevated() check used elsewhere
+// (and NOT extended to elevated custom roles either — this is hierarchy-
+// based, full stop), since anyone else approving someone's leave would
+// blur who's actually responsible for it.
 async function decide(req, res, next) {
   const client = await db.pool.connect();
   try {
@@ -212,7 +213,7 @@ async function remove(req, res, next) {
     if (leaveRequest.status !== 'pending') {
       return res.status(409).json({ error: 'Only a pending leave request can be cancelled.' });
     }
-    if (String(leaveRequest.employee_id) !== String(req.employee.id) && !isManager(req)) {
+    if (String(leaveRequest.employee_id) !== String(req.employee.id) && !isElevated(req)) {
       return res.status(403).json({ error: 'You cannot cancel someone else’s leave request.' });
     }
 

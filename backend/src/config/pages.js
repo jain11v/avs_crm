@@ -34,6 +34,5 @@ const PAGES = [
 ];
 
 const PAGE_KEYS = PAGES.map((p) => p.key);
-const ROLES = ['employee', 'manager'];
 
-module.exports = { PAGES, PAGE_KEYS, ROLES };
+module.exports = { PAGES, PAGE_KEYS };

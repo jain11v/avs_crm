@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
-function isManager(req) {
-  return req.employee.role === 'admin' || req.employee.role === 'manager';
+function isElevated(req) {
+  return req.employee.role === 'admin' || req.employee.is_elevated;
 }
 
 function todayIsoDate() {
@@ -101,7 +101,7 @@ async function mark(req, res, next) {
 
     let employeeId = req.employee.id;
     if (req.body.employee_id && String(req.body.employee_id) !== String(req.employee.id)) {
-      if (!isManager(req)) {
+      if (!isElevated(req)) {
         return res.status(403).json({ error: 'Only a manager or admin can mark attendance for someone else.' });
       }
       employeeId = req.body.employee_id;
@@ -139,7 +139,7 @@ async function list(req, res, next) {
     const conditions = [];
     const params = [];
 
-    if (isManager(req)) {
+    if (isElevated(req)) {
       if (req.query.employee_id) {
         params.push(req.query.employee_id);
         conditions.push(`a.employee_id = $${params.length}`);
@@ -189,7 +189,7 @@ async function summary(req, res, next) {
     const conditions = [`a.date >= $1::date`, `a.date < ($1::date + INTERVAL '1 month')`];
     const params = [`${month}-01`];
 
-    if (isManager(req)) {
+    if (isElevated(req)) {
       if (req.query.employee_id) {
         params.push(req.query.employee_id);
         conditions.push(`a.employee_id = $${params.length}`);
@@ -227,7 +227,7 @@ async function summary(req, res, next) {
 // caught up to it yet.
 async function roster(req, res, next) {
   try {
-    if (!isManager(req)) {
+    if (!isElevated(req)) {
       return res.status(403).json({ error: 'Only a manager or admin can view the attendance roster.' });
     }
     const date = req.query.date || todayIsoDate();
@@ -253,7 +253,7 @@ const EDITABLE_FIELDS = ['status', 'check_in_time', 'check_out_time', 'remarks']
 // PUT /api/attendance/:id — manager/admin correction of any record.
 async function update(req, res, next) {
   try {
-    if (!isManager(req)) {
+    if (!isElevated(req)) {
       return res.status(403).json({ error: 'Only a manager or admin can edit another day’s record.' });
     }
 

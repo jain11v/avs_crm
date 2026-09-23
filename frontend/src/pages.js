@@ -25,5 +25,3 @@ export const PAGES = [
   { key: 'leave', label: 'Leave', path: '/leave' },
   { key: 'payroll', label: 'Payroll', path: '/payroll' },
 ];
-
-export const ROLES = ['employee', 'manager'];

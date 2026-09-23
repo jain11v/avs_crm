@@ -178,7 +178,7 @@ async function getAlerts(req, res, next) {
       }
     }
 
-    if (role === 'admin' || role === 'manager') {
+    if (role === 'admin' || req.employee.is_elevated) {
       const commissionResult = await db.query(
         `SELECT c.id, c.policy_id, p.policy_number
          FROM commission c

@@ -13,7 +13,7 @@ export default function ExpenseForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { employee } = useAuth();
-  const isManager = employee?.role === 'admin' || employee?.role === 'manager';
+  const isManager = employee?.role === 'admin' || employee?.is_elevated;
 
   const [form, setForm] = useState({
     user_id: '',

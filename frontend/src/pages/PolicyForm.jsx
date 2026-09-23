@@ -80,7 +80,7 @@ export default function PolicyForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { employee } = useAuth();
-  const isChecker = employee?.role === 'admin' || employee?.role === 'manager';
+  const isChecker = employee?.role === 'admin' || employee?.is_elevated;
   const [searchParams] = useSearchParams();
   const renewFromId = !isEdit ? searchParams.get('renew_from') : null;
 

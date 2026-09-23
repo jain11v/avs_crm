@@ -9,7 +9,7 @@ const STATUSES = ['pending', 'approved', 'rejected'];
 
 export default function Expenses() {
   const { employee } = useAuth();
-  const canDecide = employee?.role === 'admin' || employee?.role === 'manager';
+  const canDecide = employee?.role === 'admin' || employee?.is_elevated;
 
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);

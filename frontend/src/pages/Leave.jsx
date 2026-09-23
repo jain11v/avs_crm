@@ -9,7 +9,7 @@ const STATUSES = ['pending', 'approved', 'rejected'];
 
 export default function Leave() {
   const { employee } = useAuth();
-  const isManagerRole = employee?.role === 'admin' || employee?.role === 'manager';
+  const isManagerRole = employee?.role === 'admin' || employee?.is_elevated;
 
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);

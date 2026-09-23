@@ -12,7 +12,7 @@ function requireAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.employee = decoded; // { id, email, role }
+    req.employee = decoded; // { id, email, role, is_elevated }
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Session expired or invalid. Please log in again.' });
@@ -57,4 +57,16 @@ function requirePage(pageKey) {
   };
 }
 
-module.exports = { requireAuth, requireRole, requirePage };
+// Gates a route to admin or any role flagged is_elevated (see the roles
+// table) — the generic "manager-level" elevated-access check. Distinct
+// from requireRole('admin') (strictly admin-only, never extends to
+// elevated custom roles) and from requirePage (page-access matrix,
+// unrelated to elevation).
+function requireElevated(req, res, next) {
+  if (!req.employee || !(req.employee.role === 'admin' || req.employee.is_elevated)) {
+    return res.status(403).json({ error: 'You do not have permission to do that.' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireRole, requirePage, requireElevated };

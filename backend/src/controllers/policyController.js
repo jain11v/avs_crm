@@ -12,10 +12,10 @@ const COMMISSION_AUDIT_FIELDS = ['brok_percent', 'tp_brok_percent', 'reward_perc
 
 // An employee's commission entry needs a manager/admin to confirm it
 // before it counts toward reconciliation (mirrors the discount/cashback
-// approval pattern) — a manager/admin setting it is the checker, so their
-// own entry auto-approves.
+// approval pattern) — a manager/admin (or elevated custom role) setting it
+// is the checker, so their own entry auto-approves.
 function commissionApprovalFor(employee) {
-  const isChecker = employee.role === 'admin' || employee.role === 'manager';
+  const isChecker = employee.role === 'admin' || employee.is_elevated;
   return {
     status: isChecker ? 'approved' : 'pending',
     approvedBy: isChecker ? employee.id : null,
