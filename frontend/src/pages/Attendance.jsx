@@ -20,6 +20,11 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('en-IN');
 }
 
+function rosterStatusLabel(row, date) {
+  if (row.status) return row.status.replace('_', ' ');
+  return date === todayIsoDate() ? 'Not checked in yet' : 'No record';
+}
+
 export default function Attendance() {
   const { employee } = useAuth();
   const isManager = employee?.role === 'admin' || employee?.role === 'manager';
@@ -42,6 +47,10 @@ export default function Attendance() {
 
   const [month, setMonth] = useState(todayIsoDate().slice(0, 7));
   const [summaryRows, setSummaryRows] = useState([]);
+
+  const [rosterDate, setRosterDate] = useState(todayIsoDate());
+  const [rosterRows, setRosterRows] = useState([]);
+  const [rosterLoading, setRosterLoading] = useState(true);
 
   const [editRecord, setEditRecord] = useState(null);
 
@@ -82,12 +91,29 @@ export default function Attendance() {
     }
   }, [month, employeeId]);
 
+  const loadRoster = useCallback(async () => {
+    if (!isManager) return;
+    setRosterLoading(true);
+    try {
+      const res = await api.get('/attendance/roster', { params: { date: rosterDate } });
+      setRosterRows(res.data.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not load the attendance roster.');
+    } finally {
+      setRosterLoading(false);
+    }
+  }, [isManager, rosterDate]);
+
   useEffect(() => {
     loadToday();
     if (isManager) {
       api.get('/lookups/employees').then((res) => setEmployees(res.data));
     }
   }, [loadToday, isManager]);
+
+  useEffect(() => {
+    loadRoster();
+  }, [loadRoster]);
 
   useEffect(() => {
     loadList(page);
@@ -103,6 +129,7 @@ export default function Attendance() {
       await api.post('/attendance/check-in');
       loadToday();
       loadList(page);
+      loadRoster();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not check in.');
     }
@@ -114,6 +141,7 @@ export default function Attendance() {
       await api.post('/attendance/check-out');
       loadToday();
       loadList(page);
+      loadRoster();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not check out.');
     }
@@ -128,6 +156,7 @@ export default function Attendance() {
       if (markDate === todayIsoDate()) loadToday();
       loadList(page);
       loadSummary();
+      loadRoster();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not mark attendance.');
     }
@@ -146,6 +175,7 @@ export default function Attendance() {
       loadList(page);
       loadSummary();
       loadToday();
+      loadRoster();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not save the correction.');
     }
@@ -205,6 +235,41 @@ export default function Attendance() {
           </form>
         </div>
       </div>
+
+      {isManager && (
+        <>
+          <h3>Roster</h3>
+          <div className="filter-bar">
+            <input type="date" value={rosterDate} onChange={(e) => setRosterDate(e.target.value)} max={todayIsoDate()} />
+          </div>
+          {rosterLoading ? (
+            <p className="subtitle">Loading…</p>
+          ) : rosterRows.length === 0 ? (
+            <p className="subtitle">No active employees.</p>
+          ) : (
+            <table className="data-table" style={{ marginBottom: '2rem' }}>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Check-in</th>
+                  <th>Check-out</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rosterRows.map((r) => (
+                  <tr key={r.employee_id}>
+                    <td>{r.first_name} {r.last_name}</td>
+                    <td>{formatTime(r.check_in_time)}</td>
+                    <td>{formatTime(r.check_out_time)}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{rosterStatusLabel(r, rosterDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
 
       <h3>Monthly summary</h3>
       <div className="filter-bar">

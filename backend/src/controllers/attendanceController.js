@@ -219,6 +219,35 @@ async function summary(req, res, next) {
   }
 }
 
+// GET /api/attendance/roster?date=YYYY-MM-DD — manager/admin only. One row
+// per active employee for a single day (default today): their check-in/
+// check-out time and status, or nulls if nothing's recorded yet — for
+// today that means "hasn't checked in yet"; for a past day it means the
+// end-of-day auto-absent job (backend/src/jobs/markAbsentees.js) hasn't
+// caught up to it yet.
+async function roster(req, res, next) {
+  try {
+    if (!isManager(req)) {
+      return res.status(403).json({ error: 'Only a manager or admin can view the attendance roster.' });
+    }
+    const date = req.query.date || todayIsoDate();
+
+    const result = await db.query(
+      `SELECT e.id AS employee_id, e.first_name, e.last_name,
+              a.status, a.check_in_time, a.check_out_time, a.remarks
+       FROM employees e
+       LEFT JOIN attendance a ON a.employee_id = e.id AND a.date = $1
+       WHERE e.is_active = TRUE
+       ORDER BY e.first_name, e.last_name`,
+      [date]
+    );
+
+    res.json({ date, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+}
+
 const EDITABLE_FIELDS = ['status', 'check_in_time', 'check_out_time', 'remarks'];
 
 // PUT /api/attendance/:id — manager/admin correction of any record.
@@ -262,4 +291,4 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { getToday, checkIn, checkOut, mark, list, summary, update };
+module.exports = { getToday, checkIn, checkOut, mark, list, summary, roster, update };
