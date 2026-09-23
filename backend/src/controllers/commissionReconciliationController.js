@@ -504,6 +504,11 @@ async function importStatement(req, res, next) {
     const failures = [];
     for (const row of rows) {
       if (!row.policy_id || !row.amount) continue;
+      // Each row gets its own savepoint — a bad row (bad FK, failed check
+      // constraint) would otherwise poison the whole shared transaction,
+      // making every later row in the loop fail too and turning the final
+      // COMMIT into a silent no-op ROLLBACK with nothing actually saved.
+      await client.query('SAVEPOINT row_import');
       try {
         await upsertReceipt(client, {
           policyId: row.policy_id,
@@ -515,8 +520,10 @@ async function importStatement(req, res, next) {
           employeeId: req.employee.id,
           statementId,
         });
+        await client.query('RELEASE SAVEPOINT row_import');
         imported += 1;
       } catch (err) {
+        await client.query('ROLLBACK TO SAVEPOINT row_import');
         failures.push({ policy_id: row.policy_id, error: err.message });
       }
     }

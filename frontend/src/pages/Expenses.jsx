@@ -171,7 +171,7 @@ export default function Expenses() {
                           {' · '}
                         </>
                       )}
-                      {e.status !== 'approved' && (
+                      {e.status !== 'approved' && (isOwn || canDecide) && (
                         <button className="btn-link" onClick={() => handleDelete(e)}>Delete</button>
                       )}
                     </td>

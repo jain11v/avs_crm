@@ -320,7 +320,7 @@ async function getFinance(req, res, next) {
         total_paid_by_customer: totalPaidByCustomer,
         total_discount: totalDiscount,
         total_cashback: totalCashback,
-        customer_balance: premium - totalPaidByCustomer - totalDiscount,
+        customer_balance: premium - totalPaidByCustomer - totalDiscount - totalCashback,
         total_paid_to_insurer: totalPaidToInsurer,
         insurer_balance: premium - totalPaidToInsurer,
       },

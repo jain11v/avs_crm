@@ -13,6 +13,7 @@ export default function ExpenseForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { employee } = useAuth();
+  const isManager = employee?.role === 'admin' || employee?.role === 'manager';
 
   const [form, setForm] = useState({
     user_id: '',
@@ -137,7 +138,7 @@ export default function ExpenseForm() {
           <div className="form-grid">
             <div className="field">
               <label>Employee *</label>
-              <select name="user_id" value={form.user_id} onChange={handleChange} required>
+              <select name="user_id" value={form.user_id} onChange={handleChange} required disabled={!isManager}>
                 <option value="">—</option>
                 {employees.map((e) => (
                   <option key={e.id} value={e.id}>{e.name}</option>

@@ -1,5 +1,9 @@
 const db = require('../config/db');
 
+function isManager(req) {
+  return req.employee.role === 'admin' || req.employee.role === 'manager';
+}
+
 const FK_FIELD_NAMES = {
   expense_user_id_fkey: 'Employee',
   expense_head_id_fkey: 'Head',
@@ -137,6 +141,10 @@ async function create(req, res, next) {
   try {
     const fields = pickFields(req.body);
 
+    if (fields.user_id && String(fields.user_id) !== String(req.employee.id) && !isManager(req)) {
+      return res.status(403).json({ error: 'Only a manager or admin can file an expense on someone else’s behalf.' });
+    }
+
     const missing = missingRequiredFields(fields);
     if (missing.length > 0) {
       return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}.` });
@@ -186,15 +194,22 @@ async function create(req, res, next) {
 async function update(req, res, next) {
   const client = await db.pool.connect();
   try {
-    const existing = await client.query('SELECT status FROM expense WHERE id = $1', [req.params.id]);
+    const existing = await client.query('SELECT status, user_id FROM expense WHERE id = $1', [req.params.id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Expense not found.' });
     }
     if (existing.rows[0].status === 'approved') {
       return res.status(409).json({ error: 'This expense has already been approved and cannot be edited.' });
     }
+    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isManager(req)) {
+      return res.status(403).json({ error: 'You cannot edit someone else’s expense.' });
+    }
 
     const fields = pickFields(req.body);
+
+    if (fields.user_id && String(fields.user_id) !== String(existing.rows[0].user_id) && !isManager(req)) {
+      return res.status(403).json({ error: 'Only a manager or admin can reassign an expense to someone else.' });
+    }
 
     if (Object.keys(fields).length === 0) {
       return res.status(400).json({ error: 'No fields to update.' });
@@ -308,12 +323,15 @@ async function decide(req, res, next) {
 async function remove(req, res, next) {
   const client = await db.pool.connect();
   try {
-    const existing = await client.query('SELECT status FROM expense WHERE id = $1', [req.params.id]);
+    const existing = await client.query('SELECT status, user_id FROM expense WHERE id = $1', [req.params.id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Expense not found.' });
     }
     if (existing.rows[0].status === 'approved') {
       return res.status(409).json({ error: 'This expense has already been approved and cannot be deleted.' });
+    }
+    if (String(existing.rows[0].user_id) !== String(req.employee.id) && !isManager(req)) {
+      return res.status(403).json({ error: 'You cannot delete someone else’s expense.' });
     }
 
     await client.query('BEGIN');
