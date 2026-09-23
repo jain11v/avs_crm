@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { diffFields, logChange } = require('../utils/auditLog');
+const { getOrCreateHeadId } = require('../utils/heads');
 
 const PAYMENT_AUDIT_FIELDS = ['customer_id', 'amount', 'bank_account_id', 'payment_date', 'reference_id', 'remarks'];
 
@@ -170,11 +171,12 @@ async function create(req, res, next) {
     // easy per-policy filtering; a split payment leaves policy_id null
     // there (the allocations table is the source of truth for the split).
     const singlePolicyId = allocationRows.length === 1 ? allocationRows[0].policy_id : null;
+    const headId = await getOrCreateHeadId(client, 'Premium Received');
 
     await client.query(
-      `INSERT INTO transactions (user_id, date_of_transaction, bank_id, type_of_transaction, amount, remarks, policy_id, customer_payment_id, status)
-       VALUES ($1, $2, $3, 'Credit', $4, $5, $6, $7, 'approved')`,
-      [received_by || null, payment.payment_date, bank_account_id, amount, remarks || 'Premium received from customer', singlePolicyId, payment.id]
+      `INSERT INTO transactions (user_id, date_of_transaction, bank_id, type_of_transaction, amount, head, remarks, policy_id, customer_payment_id, status)
+       VALUES ($1, $2, $3, 'Credit', $4, $5, $6, $7, $8, 'approved')`,
+      [received_by || null, payment.payment_date, bank_account_id, amount, headId, remarks || 'Premium received from customer', singlePolicyId, payment.id]
     );
 
     await logChange(client, {

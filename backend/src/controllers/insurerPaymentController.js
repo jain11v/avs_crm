@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { diffFields, logChange } = require('../utils/auditLog');
+const { getOrCreateHeadId } = require('../utils/heads');
 
 const PAYMENT_AUDIT_FIELDS = ['policy_id', 'amount', 'bank_account_id', 'payment_date', 'reference_id', 'remarks'];
 
@@ -106,11 +107,12 @@ async function create(req, res, next) {
       [policy_id, amount, bank_account_id, payment_date || null, reference_id || null, remarks || null, paid_by || null]
     );
     const payment = result.rows[0];
+    const headId = await getOrCreateHeadId(client, 'Premium Paid');
 
     await client.query(
-      `INSERT INTO transactions (user_id, date_of_transaction, bank_id, type_of_transaction, amount, remarks, policy_id, insurer_payment_id, status)
-       VALUES ($1, $2, $3, 'Debit', $4, $5, $6, $7, 'approved')`,
-      [paid_by || null, payment.payment_date, bank_account_id, amount, remarks || 'Premium paid to insurer', policy_id, payment.id]
+      `INSERT INTO transactions (user_id, date_of_transaction, bank_id, type_of_transaction, amount, head, remarks, policy_id, insurer_payment_id, status)
+       VALUES ($1, $2, $3, 'Debit', $4, $5, $6, $7, $8, 'approved')`,
+      [paid_by || null, payment.payment_date, bank_account_id, amount, headId, remarks || 'Premium paid to insurer', policy_id, payment.id]
     );
 
     await logChange(client, {
