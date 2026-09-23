@@ -1,5 +1,5 @@
 const { Pool, types } = require('pg');
-require('dotenv').config();
+require('./loadEnv');
 
 // node-postgres's default DATE (OID 1082) parser returns a JS Date built
 // from LOCAL calendar fields (new Date(y, m, d), midnight in the server's

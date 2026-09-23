@@ -1,5 +1,5 @@
+require('./config/loadEnv');
 const app = require('./app');
-require('dotenv').config();
 const markAbsentees = require('./jobs/markAbsentees');
 
 const PORT = process.env.PORT || 5000;

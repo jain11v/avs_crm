@@ -5,10 +5,17 @@
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "create-admin": "node src/scripts/createAdmin.js",
-    "test": "jest"
+    "start": "cross-env APP_ENV=production node src/server.js",
+    "dev": "cross-env APP_ENV=development nodemon src/server.js",
+    "dev:test": "cross-env APP_ENV=test nodemon src/server.js",
+    "dev:prod": "cross-env APP_ENV=production nodemon src/server.js",
+    "migrate": "cross-env APP_ENV=development node src/scripts/migrate.js",
+    "migrate:test": "cross-env APP_ENV=test node src/scripts/migrate.js",
+    "migrate:prod": "cross-env APP_ENV=production node src/scripts/migrate.js",
+    "create-admin": "cross-env APP_ENV=development node src/scripts/createAdmin.js",
+    "create-admin:test": "cross-env APP_ENV=test node src/scripts/createAdmin.js",
+    "create-admin:prod": "cross-env APP_ENV=production node src/scripts/createAdmin.js",
+    "test": "cross-env APP_ENV=test jest"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -23,6 +30,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "jest": "^30.5.2",
     "nodemon": "^3.1.4"
   }
