@@ -42,7 +42,9 @@ export default function Layout({ children }) {
         </div>
         <div className="topbar-user">
           <AlertsBell />
-          <span>{employee?.name}</span>
+          <NavLink to="/profile" className={({ isActive }) => (isActive ? 'active' : '')}>
+            {employee?.name}
+          </NavLink>
           <button className="btn-link" onClick={handleLogout}>
             Log out
           </button>

@@ -42,6 +42,7 @@ import Leave from './pages/Leave';
 import Payroll from './pages/Payroll';
 import Chat from './pages/Chat';
 import Admin from './pages/Admin';
+import Profile from './pages/Profile';
 
 export default function App() {
   return (
@@ -462,6 +463,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Chat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />
