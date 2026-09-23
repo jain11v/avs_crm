@@ -643,6 +643,20 @@ h1, h2, h3 {
   cursor: pointer;
 }
 
+/* Number inputs app-wide: no spinner arrows — every one of them (amounts,
+   percentages, counts) is either typed directly or produced by app logic,
+   never incremented one unit at a time via the spinner. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* --- Customer picker (modal-based search) --- */
 
 .customer-picker-trigger {
@@ -832,6 +846,145 @@ h1, h2, h3 {
   font-size: 1.2rem;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* --- Financial reports (dashboard) --- */
+
+.financial-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.financial-chart-block {
+  margin-top: 1.5rem;
+}
+
+.financial-chart-block h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  height: 110px;
+  padding: 0 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.bar-chart-col {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.bar-chart-bar {
+  width: 60%;
+  max-width: 26px;
+  min-height: 2px;
+  background: var(--gold-soft);
+  border-radius: 3px 3px 0 0;
+}
+
+.bar-chart-group {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.bar-chart-group .bar-chart-bar {
+  width: 10px;
+  max-width: none;
+}
+
+.bar-chart-bar-in {
+  background: #256b46;
+}
+
+.bar-chart-bar-out {
+  background: var(--danger);
+}
+
+.bar-chart-labels {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.4rem 0.25rem 0;
+}
+
+.bar-chart-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.bar-chart-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+}
+
+.legend-dot-in {
+  background: #256b46;
+}
+
+.legend-dot-out {
+  background: var(--danger);
+}
+
+.category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.category-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 90px;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.category-bar-label {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-bar-track {
+  background: var(--bg);
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.category-bar-fill {
+  height: 100%;
+  background: var(--gold-soft);
+  border-radius: 4px;
+}
+
+.category-bar-value {
+  text-align: right;
+  color: var(--text-muted);
 }
 
 /* --- Compact inputs inside a data-table cell (e.g. premium rows) --- */
