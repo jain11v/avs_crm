@@ -21,9 +21,12 @@ function daysUntil(dateStr) {
   return Math.round(diff);
 }
 
-// Free WhatsApp Web link — opens web.whatsapp.com straight into a chat with
-// the customer's number and a pre-written reminder; the employee
-// still presses send themselves. No WhatsApp API, account, or cost.
+// Free WhatsApp link — opens the WhatsApp Desktop app (whatsapp:// protocol)
+// straight into a chat with the customer's number and a pre-written
+// reminder; the employee still presses send themselves. No WhatsApp API or
+// cost. Deliberately not web.whatsapp.com: its Cross-Origin-Opener-Policy
+// cuts the link to the opening page, so every click would open yet another
+// browser tab — the desktop app reuses its one window instead.
 // Numbers are stored as typed, so normalize to India's 91XXXXXXXXXX form;
 // anything that isn't a recognizable Indian mobile number gets no link.
 function whatsappNumber(phone) {
@@ -44,7 +47,7 @@ function whatsappLink(p) {
     `Dear ${p.customer_name || 'Customer'}, your ${p.insurer_name ? `${p.insurer_name} ` : ''}` +
     `policy no. ${p.policy_number} ${expired ? 'expired' : 'is due to expire'} on ${formatDate(p.policy_end_date)}. ` +
     `Please renew it ${expired ? 'at the earliest' : 'on time'} to stay covered — reply here and we'll take care of it.`;
-  return `https://web.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(message)}`;
+  return `whatsapp://send?phone=${number}&text=${encodeURIComponent(message)}`;
 }
 
 // Status values are plain English (e.g. "Not Renewed") but CSS classes
@@ -164,9 +167,7 @@ export default function Renewals() {
                     </button>
                     {' · '}
                     {whatsappLink(p) ? (
-                      // One named tab for every reminder: WhatsApp Web refuses to run in two
-                      // tabs at once ("open in another window"), so reuse the same one.
-                      <a className="btn-link" href={whatsappLink(p)} target="whatsapp-web" rel="noopener noreferrer">
+                      <a className="btn-link" href={whatsappLink(p)} title="Opens the WhatsApp Desktop app">
                         WhatsApp
                       </a>
                     ) : (
