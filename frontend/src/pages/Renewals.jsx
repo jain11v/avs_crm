@@ -21,8 +21,8 @@ function daysUntil(dateStr) {
   return Math.round(diff);
 }
 
-// Free WhatsApp "click to chat" link (wa.me) — opens WhatsApp / WhatsApp
-// Web with the customer's number and a pre-written reminder; the employee
+// Free WhatsApp Web link — opens web.whatsapp.com straight into a chat with
+// the customer's number and a pre-written reminder; the employee
 // still presses send themselves. No WhatsApp API, account, or cost.
 // Numbers are stored as typed, so normalize to India's 91XXXXXXXXXX form;
 // anything that isn't a recognizable Indian mobile number gets no link.
@@ -44,7 +44,7 @@ function whatsappLink(p) {
     `Dear ${p.customer_name || 'Customer'}, your ${p.insurer_name ? `${p.insurer_name} ` : ''}` +
     `policy no. ${p.policy_number} ${expired ? 'expired' : 'is due to expire'} on ${formatDate(p.policy_end_date)}. ` +
     `Please renew it ${expired ? 'at the earliest' : 'on time'} to stay covered — reply here and we'll take care of it.`;
-  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+  return `https://web.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(message)}`;
 }
 
 // Status values are plain English (e.g. "Not Renewed") but CSS classes
@@ -164,7 +164,9 @@ export default function Renewals() {
                     </button>
                     {' · '}
                     {whatsappLink(p) ? (
-                      <a className="btn-link" href={whatsappLink(p)} target="_blank" rel="noopener noreferrer">
+                      // One named tab for every reminder: WhatsApp Web refuses to run in two
+                      // tabs at once ("open in another window"), so reuse the same one.
+                      <a className="btn-link" href={whatsappLink(p)} target="whatsapp-web" rel="noopener noreferrer">
                         WhatsApp
                       </a>
                     ) : (
