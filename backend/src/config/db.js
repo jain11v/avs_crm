@@ -17,12 +17,33 @@ types.setTypeParser(1082, (val) => val);
 // A single shared connection pool for the whole app. Every query should go
 // through this pool rather than opening its own client — pg handles
 // connection reuse and queuing for us.
+//
+// Limits (all overridable per environment in .env):
+// - max 10 connections: plenty for a small team, light on this machine.
+// - connection wait 5s: if the pool is exhausted, fail the request with an
+//   error instead of pg's default of waiting forever.
+// - statement_timeout 30s: stop a runaway query (e.g. a heavy report).
+// - idle_in_transaction 60s: free a connection a bug left mid-transaction.
+// SSL is off by default — the database is on the same machine, so traffic
+// never leaves it. Set DB_SSL=true once the database is on another host.
+const envInt = (name, fallback) => {
+  const n = parseInt(process.env[name], 10);
+  return Number.isNaN(n) ? fallback : n;
+};
+
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
   database: process.env.DB_NAME,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+  max: envInt('DB_POOL_MAX', 10),
+  connectionTimeoutMillis: envInt('DB_CONNECTION_TIMEOUT_MS', 5000),
+  idleTimeoutMillis: envInt('DB_IDLE_TIMEOUT_MS', 30000),
+  statement_timeout: envInt('DB_STATEMENT_TIMEOUT_MS', 30000),
+  idle_in_transaction_session_timeout: envInt('DB_IDLE_IN_TRANSACTION_TIMEOUT_MS', 60000),
+  application_name: `insurance-crm-${process.env.APP_ENV || 'development'}`,
 });
 
 pool.on('error', (err) => {

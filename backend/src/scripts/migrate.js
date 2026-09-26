@@ -16,8 +16,19 @@
 //
 // Prefer the npm scripts over calling this directly: `npm run migrate`,
 // `npm run migrate:test`, `npm run migrate:prod`.
+//
+// The app's own DB login can only read/write data, not change the schema,
+// so migrations connect as MIGRATE_DB_USER / MIGRATE_DB_PASSWORD (the
+// postgres superuser) when set in the .env file, and without the app's
+// 30s statement timeout. Must happen before config/db creates the pool.
 const fs = require('fs');
 const path = require('path');
+require('../config/loadEnv');
+if (process.env.MIGRATE_DB_USER) {
+  process.env.DB_USER = process.env.MIGRATE_DB_USER;
+  process.env.DB_PASSWORD = process.env.MIGRATE_DB_PASSWORD || '';
+}
+process.env.DB_STATEMENT_TIMEOUT_MS = '0';
 const db = require('../config/db');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
