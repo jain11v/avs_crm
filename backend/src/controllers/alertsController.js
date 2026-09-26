@@ -240,6 +240,55 @@ async function getAlerts(req, res, next) {
       }
     }
 
+    if (hasPage('insurer_balances')) {
+      // A faulty duplicate premium payment is recorded as a Debit bank
+      // entry linked to the insurer, and cleared by a Credit when the
+      // insurer reverses it (see insurerBalanceController.js). Walk each
+      // insurer's entries in date order to find since when its balance has
+      // been continuously negative (insurer owes us); alert once that's
+      // longer than FAULTY_PAYMENT_REVERSAL_DAYS.
+      const FAULTY_PAYMENT_REVERSAL_DAYS = 7;
+      const entries = await db.query(
+        `SELECT be.insurer_id, i.name AS insurer_name, be.entry_date, be.type_of_transaction, be.amount
+         FROM bank_entries be
+         JOIN insurers i ON be.insurer_id = i.id
+         ORDER BY be.insurer_id, be.entry_date, be.id`
+      );
+      const byInsurer = new Map();
+      for (const e of entries.rows) {
+        const s = byInsurer.get(e.insurer_id) || { name: e.insurer_name, balance: 0, owedSince: null };
+        s.balance += e.type_of_transaction === 'Credit' ? Number(e.amount) : -Number(e.amount);
+        if (s.balance >= 0) s.owedSince = null;
+        else if (!s.owedSince) s.owedSince = e.entry_date;
+        byInsurer.set(e.insurer_id, s);
+      }
+
+      // entry_date comes back as 'YYYY-MM-DD'; compare against today in
+      // Node local time, like the rest of the app.
+      const now = new Date();
+      const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      const daysSince = (ymd) => {
+        const [y, m, d] = ymd.split('-').map(Number);
+        return Math.round((todayUtc - Date.UTC(y, m - 1, d)) / 86400000);
+      };
+
+      const overdue = [...byInsurer.values()]
+        .filter((s) => s.owedSince && daysSince(s.owedSince) > FAULTY_PAYMENT_REVERSAL_DAYS)
+        .sort((a, b) => (a.owedSince < b.owedSince ? -1 : 1));
+      if (overdue.length > 0) {
+        alerts.push({
+          type: 'faulty_insurer_payments',
+          count: overdue.length,
+          message: `${overdue.length} insurer${overdue.length === 1 ? '' : 's'} haven't reversed a faulty payment within ${FAULTY_PAYMENT_REVERSAL_DAYS} days`,
+          viewAllLink: '/insurer-balances',
+          items: overdue.slice(0, 5).map((s) => ({
+            label: `${s.name} — ₹${(-s.balance).toLocaleString('en-IN')} pending for ${daysSince(s.owedSince)} days`,
+            link: '/insurer-balances',
+          })),
+        });
+      }
+    }
+
     res.json({ data: alerts });
   } catch (err) {
     next(err);

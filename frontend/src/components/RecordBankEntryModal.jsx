@@ -17,14 +17,16 @@ const EMPTY_FORM = {
 
 export default function RecordBankEntryModal({ open, onClose, onSave }) {
   const [form, setForm] = useState(EMPTY_FORM);
-  const [linkTo, setLinkTo] = useState('none'); // 'none' | 'employee' | 'customer'
+  const [linkTo, setLinkTo] = useState('none'); // 'none' | 'employee' | 'customer' | 'insurer'
   const [employeeId, setEmployeeId] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [customerLabel, setCustomerLabel] = useState('');
+  const [insurerId, setInsurerId] = useState('');
 
   const [bankAccounts, setBankAccounts] = useState([]);
   const [heads, setHeads] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [insurers, setInsurers] = useState([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -35,11 +37,13 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
     setEmployeeId('');
     setCustomerId('');
     setCustomerLabel('');
+    setInsurerId('');
     setError('');
     setSaving(false);
     api.get('/lookups/bank-accounts').then((res) => setBankAccounts(res.data));
     api.get('/lookups/heads').then((res) => setHeads(res.data));
     api.get('/lookups/employees').then((res) => setEmployees(res.data));
+    api.get('/lookups/insurers').then((res) => setInsurers(res.data));
   }, [open]);
 
   if (!open) return null;
@@ -54,6 +58,7 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
     setEmployeeId('');
     setCustomerId('');
     setCustomerLabel('');
+    setInsurerId('');
   }
 
   async function handleSave() {
@@ -69,6 +74,10 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
       setError('Select a customer, or set "Link to" back to None.');
       return;
     }
+    if (linkTo === 'insurer' && !insurerId) {
+      setError('Select an insurer, or set "Link to" back to None.');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -82,6 +91,7 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
         remarks: form.remarks.trim() || null,
         employee_id: linkTo === 'employee' ? employeeId : null,
         customer_id: linkTo === 'customer' ? customerId : null,
+        insurer_id: linkTo === 'insurer' ? insurerId : null,
       });
     } catch (err) {
       setError(err.response?.data?.error || 'Could not record this bank entry.');
@@ -153,6 +163,7 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
                 <option value="none">Nobody — this entry is self-contained</option>
                 <option value="employee">An employee</option>
                 <option value="customer">A customer</option>
+                <option value="insurer">An insurer (e.g. a faulty duplicate premium payment)</option>
               </select>
             </div>
 
@@ -176,6 +187,18 @@ export default function RecordBankEntryModal({ open, onClose, onSave }) {
                   customerLabel={customerLabel}
                   onSelect={(id, label) => { setCustomerId(id); setCustomerLabel(label); }}
                 />
+              </div>
+            )}
+
+            {linkTo === 'insurer' && (
+              <div className="field field-wide">
+                <label>Insurer</label>
+                <select value={insurerId} onChange={(e) => setInsurerId(e.target.value)}>
+                  <option value="">—</option>
+                  {insurers.map((i) => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>

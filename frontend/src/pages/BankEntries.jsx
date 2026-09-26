@@ -45,6 +45,7 @@ export default function BankEntries() {
   function linkedPerson(r) {
     if (r.employee_first_name) return `${r.employee_first_name} ${r.employee_last_name} (employee)`;
     if (r.customer_name) return `${r.customer_name} (customer)`;
+    if (r.insurer_name) return `${r.insurer_name} (insurer)`;
     return '—';
   }
 

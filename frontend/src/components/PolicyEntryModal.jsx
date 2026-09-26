@@ -37,7 +37,9 @@ function formatMoney(n) {
 // writes to the same three separate tables (customer_payments,
 // insurer_payments, policy_adjustments) via the same endpoints the rest of
 // the app uses — only the form presenting them is combined.
-export default function PolicyEntryModal({ open, policyId, customerId, premiumAmount, onClose, onSaved }) {
+// A policy is paid to the insurer only once (the backend rejects a second
+// payment), so once it's paid the insurer section is hidden entirely.
+export default function PolicyEntryModal({ open, policyId, customerId, premiumAmount, insurerAlreadyPaid, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -68,7 +70,7 @@ export default function PolicyEntryModal({ open, policyId, customerId, premiumAm
 
   function validate() {
     const hasCustomer = Number(form.customer_amount) > 0;
-    const hasInsurer = Boolean(form.insurer_bank_account_id);
+    const hasInsurer = !insurerAlreadyPaid && Boolean(form.insurer_bank_account_id);
     const hasAdjustment = Number(form.adjustment_amount) > 0;
 
     if (!hasCustomer && !hasInsurer && !hasAdjustment) {
@@ -105,7 +107,7 @@ export default function PolicyEntryModal({ open, policyId, customerId, premiumAm
         });
       }
 
-      if (form.insurer_bank_account_id) {
+      if (!insurerAlreadyPaid && form.insurer_bank_account_id) {
         await api.post('/insurer-payments', {
           policy_id: policyId,
           amount: premiumAmount,
@@ -181,35 +183,39 @@ export default function PolicyEntryModal({ open, policyId, customerId, premiumAm
             </div>
           </div>
 
-          <h4 style={{ marginTop: '1.5rem', marginBottom: '0.6rem' }}>Insurer payment</h4>
-          <p className="subtitle" style={{ marginTop: 0 }}>Always the full premium — that's what gets remitted to the insurer.</p>
-          <div className="form-grid">
-            <div className="field">
-              <label>Amount paid</label>
-              <input type="text" readOnly value={formatMoney(premiumAmount)} />
+          {!insurerAlreadyPaid && (
+            <>
+            <h4 style={{ marginTop: '1.5rem', marginBottom: '0.6rem' }}>Insurer payment</h4>
+            <p className="subtitle" style={{ marginTop: 0 }}>Always the full premium — that's what gets remitted to the insurer.</p>
+            <div className="form-grid">
+              <div className="field">
+                <label>Amount paid</label>
+                <input type="text" readOnly value={formatMoney(premiumAmount)} />
+              </div>
+              <div className="field">
+                <label>Paid from account</label>
+                <select name="insurer_bank_account_id" value={form.insurer_bank_account_id} onChange={handleChange}>
+                  <option value="">—</option>
+                  {bankAccounts.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.bank_name})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Payment date</label>
+                <input type="date" name="insurer_payment_date" value={form.insurer_payment_date} onChange={handleChange} />
+              </div>
+              <div className="field">
+                <label>Reference / cheque no.</label>
+                <input name="insurer_reference_id" value={form.insurer_reference_id} onChange={handleChange} maxLength={100} />
+              </div>
+              <div className="field">
+                <label>Remarks</label>
+                <input name="insurer_remarks" value={form.insurer_remarks} onChange={handleChange} maxLength={255} />
+              </div>
             </div>
-            <div className="field">
-              <label>Paid from account</label>
-              <select name="insurer_bank_account_id" value={form.insurer_bank_account_id} onChange={handleChange}>
-                <option value="">—</option>
-                {bankAccounts.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.bank_name})</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Payment date</label>
-              <input type="date" name="insurer_payment_date" value={form.insurer_payment_date} onChange={handleChange} />
-            </div>
-            <div className="field">
-              <label>Reference / cheque no.</label>
-              <input name="insurer_reference_id" value={form.insurer_reference_id} onChange={handleChange} maxLength={100} />
-            </div>
-            <div className="field">
-              <label>Remarks</label>
-              <input name="insurer_remarks" value={form.insurer_remarks} onChange={handleChange} maxLength={255} />
-            </div>
-          </div>
+            </>
+          )}
 
           <h4 style={{ marginTop: '1.5rem', marginBottom: '0.6rem' }}>Discount / cashback</h4>
           <p className="subtitle" style={{ marginTop: 0 }}>Needs a senior's approval before it counts.</p>

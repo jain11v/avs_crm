@@ -23,6 +23,7 @@ router.use('/insurer-payments', require('./insurerPaymentRoutes'));
 router.use('/policy-adjustments', require('./policyAdjustmentRoutes'));
 router.use('/customer-balances', require('./customerBalanceRoutes'));
 router.use('/employee-balances', require('./employeeBalanceRoutes'));
+router.use('/insurer-balances', require('./insurerBalanceRoutes'));
 router.use('/bank-entries', require('./bankEntryRoutes'));
 router.use('/commission-reconciliation', require('./commissionReconciliationRoutes'));
 router.use('/audit-log', require('./auditLogRoutes'));

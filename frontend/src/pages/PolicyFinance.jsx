@@ -270,6 +270,7 @@ export default function PolicyFinance() {
         policyId={policy.id}
         customerId={policy.customer_id}
         premiumAmount={totals.premium_amount}
+        insurerAlreadyPaid={insurer_payments.length > 0}
         onClose={() => setEntryModalOpen(false)}
         onSaved={() => { setEntryModalOpen(false); load(); }}
       />

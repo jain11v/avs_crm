@@ -15,6 +15,12 @@ function friendlyForeignKeyError(err) {
   return `${field} does not refer to a valid record. Please re-select it and try again.`;
 }
 
+// A policy is paid to the insurer exactly once (migration 037). A second
+// debit showing up in the bank is a faulty payment the insurer reverses —
+// it goes in as a Bank Entry linked to the insurer, not here.
+const DUPLICATE_PAYMENT_ERROR =
+  'This policy has already been paid to the insurer. If the bank debited it twice, record the extra debit as a Bank Entry linked to the insurer.';
+
 function friendlyCheckError(err) {
   if (err.constraint === 'insurer_payments_amount_check') {
     return 'Amount must be greater than zero.';
@@ -100,6 +106,12 @@ async function create(req, res, next) {
 
     await client.query('BEGIN');
 
+    const existing = await client.query('SELECT 1 FROM insurer_payments WHERE policy_id = $1', [policy_id]);
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: DUPLICATE_PAYMENT_ERROR });
+    }
+
     const result = await client.query(
       `INSERT INTO insurer_payments (policy_id, amount, bank_account_id, payment_date, reference_id, remarks, paid_by)
        VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7)
@@ -128,6 +140,9 @@ async function create(req, res, next) {
     res.status(201).json({ id: payment.id });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.code === '23505' && err.constraint === 'insurer_payments_policy_id_key') {
+      return res.status(400).json({ error: DUPLICATE_PAYMENT_ERROR });
+    }
     if (err.code === '23514') {
       return res.status(400).json({ error: friendlyCheckError(err) });
     }
