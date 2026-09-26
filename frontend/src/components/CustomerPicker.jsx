@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 10;
 
@@ -47,6 +48,10 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchRequired, setSearchRequired] = useState(false);
+  // Non-admins get at most 10 results and no paging — enforced by the
+  // backend, see utils/restrictedSearch.js.
+  const isAdmin = useAuth().employee?.role === 'admin';
 
   const [addMode, setAddMode] = useState(false);
   const [newCustomer, setNewCustomer] = useState(EMPTY_NEW_CUSTOMER);
@@ -67,6 +72,7 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
       const res = await api.get('/customers', { params: { q, page: p, limit: PAGE_SIZE } });
       setResults(res.data.data);
       setTotal(res.data.total);
+      setSearchRequired(!!res.data.search_required);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not search customers.');
     } finally {
@@ -417,6 +423,8 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
 
                   {loading ? (
                     <p className="subtitle">Searching…</p>
+                  ) : searchRequired ? (
+                    <p className="subtitle">Type at least 3 characters to search customers.</p>
                   ) : results.length === 0 ? (
                     <p className="subtitle">No matching customers.</p>
                   ) : (
@@ -450,7 +458,11 @@ export default function CustomerPicker({ customerId, customerLabel, onSelect }) 
                     </div>
                   )}
 
-                  {total > PAGE_SIZE && (
+                  {!isAdmin && total > results.length && (
+                    <p className="subtitle">Showing {results.length} of {total} matches — refine your search to narrow it down.</p>
+                  )}
+
+                  {isAdmin && total > PAGE_SIZE && (
                     <div className="pagination">
                       <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn-secondary">
                         Previous

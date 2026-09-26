@@ -3,6 +3,7 @@ const { computePremiums } = require('../utils/premiumCalc');
 const { validateCommission } = require('../utils/commissionCalc');
 const { diffFields, logChange } = require('../utils/auditLog');
 const { selfAndDescendantIds } = require('../utils/orgHierarchy');
+const { restrictedSearch, RENEWAL_WINDOW_SQL } = require('../utils/restrictedSearch');
 
 const POLICY_AUDIT_FIELDS = [
   'policy_number', 'customer_id', 'insurer_id', 'insurer_branch_id',
@@ -69,9 +70,9 @@ async function list(req, res, next) {
   try {
     const q = (req.query.q || '').trim();
     const status = (req.query.status || '').trim();
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const offset = (page - 1) * limit;
+    const search = restrictedSearch(req, q);
+    if (search.blocked) return res.json(search.blocked);
+    const { page, limit, offset } = search;
 
     const conditions = [];
     const params = [];
@@ -166,9 +167,17 @@ async function getRenewalsDue(req, res, next) {
   try {
     const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
 
-    const params = [days];
+    // Admin picks the look-ahead window and sees everything overdue.
+    // Everyone else gets a fixed, narrow window (RENEWAL_WINDOW_SQL) so the
+    // renewals list can't be used to pull the whole book of policies.
+    const params = [];
+    let windowFilter;
     let ownerFilter = '';
-    if (req.employee.role !== 'admin') {
+    if (req.employee.role === 'admin') {
+      params.push(days);
+      windowFilter = `p.policy_end_date <= CURRENT_DATE + ($1 || ' days')::interval`;
+    } else {
+      windowFilter = RENEWAL_WINDOW_SQL;
       const ownerIds = await selfAndDescendantIds(req.employee.id);
       params.push(ownerIds);
       ownerFilter = `AND p.user_id = ANY($${params.length})`;
@@ -182,14 +191,14 @@ async function getRenewalsDue(req, res, next) {
        LEFT JOIN insurers i ON p.insurer_id = i.id
        WHERE p.renewable = true
          AND p.status IN ('Active', 'Not Renewed')
-         AND p.policy_end_date <= CURRENT_DATE + ($1 || ' days')::interval
+         AND ${windowFilter}
          AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
          ${ownerFilter}
        ORDER BY p.policy_end_date ASC`,
       params
     );
 
-    res.json({ data: result.rows, days });
+    res.json({ data: result.rows, days: req.employee.role === 'admin' ? days : null });
   } catch (err) {
     next(err);
   }

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 
 const DAYS_OPTIONS = [7, 30, 60, 90];
 
@@ -36,6 +37,9 @@ function statusSlug(status) {
 // actually renewing it (which flips it to 'Renewed').
 export default function Renewals() {
   const navigate = useNavigate();
+  // Non-admins get a fixed window (ending in the next 10 days or ended in
+  // the last 2) set by the backend — the days picker is admin-only.
+  const isAdmin = useAuth().employee?.role === 'admin';
   const [days, setDays] = useState(30);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,17 +78,21 @@ export default function Renewals() {
       <div className="page-header">
         <div>
           <h2>Renewals</h2>
-          <p className="subtitle">{rows.length} total — policies due for renewal, most urgent first</p>
+          <p className="subtitle">
+            {rows.length} total — {isAdmin ? 'policies due for renewal' : 'policies ending in the next 10 days or ended in the last 2 days'}, most urgent first
+          </p>
         </div>
       </div>
 
-      <div className="filter-bar">
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="status-filter">
-          {DAYS_OPTIONS.map((d) => (
-            <option key={d} value={d}>Due within {d} days</option>
-          ))}
-        </select>
-      </div>
+      {isAdmin && (
+        <div className="filter-bar">
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="status-filter">
+            {DAYS_OPTIONS.map((d) => (
+              <option key={d} value={d}>Due within {d} days</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && <div className="form-error">{error}</div>}
 

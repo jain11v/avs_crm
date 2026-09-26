@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { validateFormats, normalizeFormats } = require('../utils/validators');
+const { restrictedSearch } = require('../utils/restrictedSearch');
 
 // Maps a Postgres foreign key constraint name to a plain-English field name,
 // so "violates foreign key constraint customers_branch_id_fkey" becomes
@@ -22,9 +23,9 @@ function friendlyForeignKeyError(err) {
 async function list(req, res, next) {
   try {
     const q = (req.query.q || '').trim();
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const offset = (page - 1) * limit;
+    const search = restrictedSearch(req, q);
+    if (search.blocked) return res.json(search.blocked);
+    const { page, limit, offset } = search;
 
     // Name alone isn't enough to find someone in a database of thousands —
     // many customers share a name, and most don't have an email on file.

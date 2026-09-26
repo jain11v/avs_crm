@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { pagesForRole } = require('../utils/rolePages');
 const { selfAndDescendantIds } = require('../utils/orgHierarchy');
+const { RENEWAL_WINDOW_SQL } = require('../utils/restrictedSearch');
 
 // No stored/scheduled notifications here — there's no cron in this app and
 // no email/SMS credentials to send anything externally, so alerts are
@@ -28,6 +29,11 @@ async function getAlerts(req, res, next) {
       // rule as policyController.getRenewalsDue(): an employee only gets
       // notified about their own due renewals, a manager also gets
       // notified about their team's.
+      // Same window as the Renewals page: admin 30 days ahead (plus
+      // anything overdue), everyone else the narrow RENEWAL_WINDOW_SQL.
+      const windowFilter = hierarchyIds
+        ? RENEWAL_WINDOW_SQL
+        : `p.policy_end_date <= CURRENT_DATE + INTERVAL '30 days'`;
       const ownerParams = [];
       let ownerFilter = '';
       if (hierarchyIds) {
@@ -40,7 +46,7 @@ async function getAlerts(req, res, next) {
          FROM policies p
          LEFT JOIN customers c ON p.customer_id = c.id
          WHERE p.renewable = true AND p.status IN ('Active', 'Not Renewed')
-           AND p.policy_end_date <= CURRENT_DATE + INTERVAL '30 days'
+           AND ${windowFilter}
            AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
            ${ownerFilter}
          ORDER BY p.policy_end_date ASC
@@ -50,7 +56,7 @@ async function getAlerts(req, res, next) {
       const countResult = await db.query(
         `SELECT COUNT(*) FROM policies p
          WHERE p.renewable = true AND p.status IN ('Active', 'Not Renewed')
-           AND p.policy_end_date <= CURRENT_DATE + INTERVAL '30 days'
+           AND ${windowFilter}
            AND NOT EXISTS (SELECT 1 FROM policies r WHERE r.renewed_from_policy_id = p.id)
            ${ownerFilter}`,
         ownerParams
@@ -60,7 +66,7 @@ async function getAlerts(req, res, next) {
         alerts.push({
           type: 'renewals_due',
           count,
-          message: `${count} polic${count === 1 ? 'y' : 'ies'} due for renewal within 30 days`,
+          message: `${count} polic${count === 1 ? 'y' : 'ies'} due for renewal ${hierarchyIds ? 'in the next 10 days' : 'within 30 days'}`,
           viewAllLink: '/renewals',
           items: result.rows.map((r) => ({
             label: `${r.policy_number} — ${r.customer_name || 'Unknown'} (due ${new Date(r.policy_end_date).toLocaleDateString('en-IN')})`,

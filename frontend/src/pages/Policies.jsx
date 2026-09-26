@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 20;
 const STATUSES = ['Active', 'Renewed', 'Not Renewed'];
@@ -20,7 +21,12 @@ export default function Policies() {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchRequired, setSearchRequired] = useState(false);
   const navigate = useNavigate();
+  const { employee } = useAuth();
+  // Non-admins can only look records up by searching (max 10 results, no
+  // paging) — enforced by the backend, see utils/restrictedSearch.js.
+  const isAdmin = employee?.role === 'admin';
 
   const load = useCallback(async (q, st, p) => {
     setLoading(true);
@@ -29,6 +35,7 @@ export default function Policies() {
       const res = await api.get('/policies', { params: { q, status: st, page: p, limit: PAGE_SIZE } });
       setRows(res.data.data);
       setTotal(res.data.total);
+      setSearchRequired(!!res.data.search_required);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load policies.');
     } finally {
@@ -63,7 +70,7 @@ export default function Policies() {
       <div className="page-header">
         <div>
           <h2>Policies</h2>
-          <p className="subtitle">{total} total</p>
+          {isAdmin && <p className="subtitle">{total} total</p>}
         </div>
         <Link to="/policies/new" className="btn-primary btn-inline">
           + Add policy
@@ -100,6 +107,8 @@ export default function Policies() {
 
       {loading ? (
         <p className="subtitle">Loading…</p>
+      ) : searchRequired ? (
+        <p className="subtitle">Type at least 3 characters and search to find policies.</p>
       ) : rows.length === 0 ? (
         <p className="subtitle">No policies found.</p>
       ) : (
@@ -147,15 +156,21 @@ export default function Policies() {
             </tbody>
           </table>
 
-          <div className="pagination">
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn-secondary">
-              Previous
-            </button>
-            <span>Page {page} of {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="btn-secondary">
-              Next
-            </button>
-          </div>
+          {!isAdmin && total > rows.length && (
+            <p className="subtitle">Showing {rows.length} of {total} matches — refine your search to narrow it down.</p>
+          )}
+
+          {isAdmin && (
+            <div className="pagination">
+              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn-secondary">
+                Previous
+              </button>
+              <span>Page {page} of {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="btn-secondary">
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
     </Layout>
