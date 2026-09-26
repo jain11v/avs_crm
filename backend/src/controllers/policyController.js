@@ -185,7 +185,7 @@ async function getRenewalsDue(req, res, next) {
 
     const result = await db.query(
       `SELECT p.id, p.policy_number, p.premium_amount, p.policy_end_date, p.status,
-              c.name AS customer_name, i.name AS insurer_name
+              c.name AS customer_name, c.phone AS customer_phone, i.name AS insurer_name
        FROM policies p
        LEFT JOIN customers c ON p.customer_id = c.id
        LEFT JOIN insurers i ON p.insurer_id = i.id

@@ -21,6 +21,32 @@ function daysUntil(dateStr) {
   return Math.round(diff);
 }
 
+// Free WhatsApp "click to chat" link (wa.me) — opens WhatsApp / WhatsApp
+// Web with the customer's number and a pre-written reminder; the employee
+// still presses send themselves. No WhatsApp API, account, or cost.
+// Numbers are stored as typed, so normalize to India's 91XXXXXXXXXX form;
+// anything that isn't a recognizable Indian mobile number gets no link.
+function whatsappNumber(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  let national = null;
+  if (digits.length === 10) national = digits;
+  else if (digits.length === 11 && digits.startsWith('0')) national = digits.slice(1);
+  else if (digits.length === 12 && digits.startsWith('91')) national = digits.slice(2);
+  // Indian mobile numbers start with 6-9; anything else is a landline.
+  return national && /^[6-9]/.test(national) ? `91${national}` : null;
+}
+
+function whatsappLink(p) {
+  const number = whatsappNumber(p.customer_phone);
+  if (!number) return null;
+  const expired = daysUntil(p.policy_end_date) < 0;
+  const message =
+    `Dear ${p.customer_name || 'Customer'}, your ${p.insurer_name ? `${p.insurer_name} ` : ''}` +
+    `policy no. ${p.policy_number} ${expired ? 'expired' : 'is due to expire'} on ${formatDate(p.policy_end_date)}. ` +
+    `Please renew it ${expired ? 'at the earliest' : 'on time'} to stay covered — reply here and we'll take care of it.`;
+  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+}
+
 // Status values are plain English (e.g. "Not Renewed") but CSS classes
 // can't contain spaces — slugify before building the status-pill class.
 function statusSlug(status) {
@@ -136,6 +162,14 @@ export default function Renewals() {
                     <button className="btn-link" onClick={() => handleMarkLost(p)}>
                       Not renewed
                     </button>
+                    {' · '}
+                    {whatsappLink(p) ? (
+                      <a className="btn-link" href={whatsappLink(p)} target="_blank" rel="noopener noreferrer">
+                        WhatsApp
+                      </a>
+                    ) : (
+                      <span className="subtitle" title="No valid mobile number on this customer">No phone</span>
+                    )}
                   </td>
                 </tr>
               );
