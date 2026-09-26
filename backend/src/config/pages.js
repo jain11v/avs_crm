@@ -32,6 +32,7 @@ const PAGES = [
   { key: 'attendance', label: 'Attendance' },
   { key: 'performance', label: 'Performance' },
   { key: 'financial_reports', label: 'Financial reports' },
+  { key: 'reports', label: 'Reports' },
   { key: 'leave', label: 'Leave' },
   { key: 'payroll', label: 'Payroll' },
 ];

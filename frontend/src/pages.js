@@ -20,6 +20,7 @@ export const PAGES = [
   { key: 'customer_balances', label: 'Customer balances', path: '/customer-balances' },
   { key: 'employee_balances', label: 'Employee balances', path: '/employee-balances' },
   { key: 'insurer_balances', label: 'Insurer balances', path: '/insurer-balances' },
+  { key: 'reports', label: 'Reports', path: '/reports' },
   { key: 'bank_entries', label: 'Bank entries', path: '/bank-entries' },
   { key: 'commission_reconciliation', label: 'Commission reconciliation', path: '/commission-reconciliation' },
   { key: 'audit_log', label: 'Activity log', path: '/activity-log' },
